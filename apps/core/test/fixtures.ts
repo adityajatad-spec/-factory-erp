@@ -1,0 +1,155 @@
+import type { ItemDto, PartyDto, RoleCode } from '@factory-erp/contracts';
+import type { AuthenticatedActor } from '../src/platform/actor';
+import { uuidv7 } from '../src/platform/ids';
+import { toJsonb } from '../src/platform/json';
+import { createItem } from '../src/modules/catalog/commands';
+import { hashPassword } from '../src/modules/identity/password';
+import { loadAccess } from '../src/modules/identity/sessions';
+import { createParty } from '../src/modules/parties/commands';
+import { syncRoles } from '../src/seed/seed';
+import type { Services } from '../src/services';
+
+export const TEST_PASSWORD = 'correct horse battery staple';
+
+export interface Fixture {
+  companyId: string;
+  actors: Record<'owner' | 'accountant' | 'worker', AuthenticatedActor>;
+  customers: { intra: PartyDto; inter: PartyDto };
+  items: { widget: ItemDto; carton: ItemDto; rawMaterial: ItemDto };
+}
+
+/** Minimal synthetic company: roles, three users, two customers (intra/inter-state), items. */
+export async function createFixture(services: Services): Promise<Fixture> {
+  const { db } = services;
+  await syncRoles(services);
+  const companyId = uuidv7();
+  const passwordHash = await hashPassword(TEST_PASSWORD);
+
+  await db
+    .insertInto('platform.companies')
+    .values({
+      id: companyId,
+      legalName: 'Test Works Pvt Ltd',
+      gstin: '27TESTO0001A1Z1',
+      stateCode: '27',
+      addressLine1: 'Test Road',
+      city: 'Pune',
+      postalCode: '411000',
+      bankDetails: toJsonb({
+        bankName: 'Test Bank',
+        accountName: 'Test Works',
+        accountNumber: '0001',
+        ifsc: 'TEST0000001',
+      }),
+      isDemo: true,
+    })
+    .execute();
+
+  for (const [code, rate] of [
+    ['7326', '18'],
+    ['4819', '5'],
+    ['7208', '18'],
+  ] as const) {
+    await db
+      .insertInto('catalog.hsnCodes')
+      .values({ code, description: `HSN ${code}` })
+      .execute();
+    await db
+      .insertInto('catalog.gstRates')
+      .values({
+        id: uuidv7(),
+        hsnCode: code,
+        ratePercent: rate,
+        effectiveFrom: '2020-04-01',
+        sourceNote: 'test',
+        verificationStatus: 'DEMO_UNVERIFIED',
+      })
+      .execute();
+  }
+
+  const actor = async (username: string, role: RoleCode): Promise<AuthenticatedActor> => {
+    const id = uuidv7();
+    await db
+      .insertInto('identity.users')
+      .values({ id, username, displayName: username, passwordHash })
+      .execute();
+    await db
+      .insertInto('identity.userRoles')
+      .values({ userId: id, roleCode: role, companyId })
+      .execute();
+    const access = await loadAccess(db, id, companyId);
+    return {
+      requestId: `test-${username}`,
+      actorKind: 'user',
+      user: {
+        id,
+        username,
+        displayName: username,
+        companyId,
+        sessionId: 'test',
+        roles: access.roles,
+        permissions: access.permissions,
+      },
+    };
+  };
+  const actors = {
+    owner: await actor('owner', 'OWNER'),
+    accountant: await actor('accountant', 'ACCOUNTANT'),
+    worker: await actor('worker', 'WORKER'),
+  };
+
+  const c = services.commands;
+  const intra = await c.execute(
+    createParty,
+    {
+      code: 'C-INTRA',
+      name: 'Intra Customer',
+      isCustomer: true,
+      isSupplier: false,
+      gstin: '27TESTO0002B1Z2',
+      stateCode: '27',
+    },
+    actors.owner,
+  );
+  const inter = await c.execute(
+    createParty,
+    {
+      code: 'C-INTER',
+      name: 'Inter Customer',
+      isCustomer: true,
+      isSupplier: false,
+      gstin: '24TESTO0003C1Z3',
+      stateCode: '24',
+    },
+    actors.owner,
+  );
+  const widget = await c.execute(
+    createItem,
+    {
+      code: 'W-1',
+      name: 'Widget',
+      itemType: 'FINISHED_GOOD',
+      uom: 'NOS',
+      hsnCode: '7326',
+      defaultSaleRate: '100',
+    },
+    actors.owner,
+  );
+  const carton = await c.execute(
+    createItem,
+    { code: 'CTN', name: 'Carton', itemType: 'COMPONENT', uom: 'NOS', hsnCode: '4819' },
+    actors.owner,
+  );
+  const rawMaterial = await c.execute(
+    createItem,
+    { code: 'RM-1', name: 'Steel Sheet', itemType: 'RAW_MATERIAL', uom: 'KGS', hsnCode: '7208' },
+    actors.owner,
+  );
+
+  return { companyId, actors, customers: { intra, inter }, items: { widget, carton, rawMaterial } };
+}
+
+/** An actor identical to `user` but acting through the (future) AI copilot. */
+export function asAiAgent(actor: AuthenticatedActor): AuthenticatedActor {
+  return { ...actor, actorKind: 'ai_agent', aiSessionId: uuidv7() };
+}

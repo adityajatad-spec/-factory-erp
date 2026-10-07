@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: factoryerp
+          POSTGRES_PASSWORD: factoryerp
+          POSTGRES_DB: factoryerp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U factoryerp -d factoryerp"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://factoryerp:factoryerp@127.0.0.1:5432/factoryerp
+      TEST_DATABASE_ADMIN_URL: postgres://factoryerp:factoryerp@127.0.0.1:5432/postgres
+      # GitHub's Ubuntu runners ship Google Chrome; used for invoice PDFs and the e2e smoke test.
+      PDF_BROWSER_EXECUTABLE: /usr/bin/google-chrome
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Enable pnpm (version pinned in package.json)
+        run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Format
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Migrate database
+        run: pnpm db:migrate
+
+      - name: Generated DB types are up to date
+        run: pnpm db:codegen --verify
+
+      - name: Unit + integration tests (real PostgreSQL)
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # Throwaway database + fresh demo data + the production build; prints server error logs
+      # and fails on any. Journeys: smoke, receivables, sales corrections.
+      - name: End-to-end journeys (built app, real browser)
+        run: pnpm --filter @factory-erp/web e2e

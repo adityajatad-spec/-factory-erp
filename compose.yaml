@@ -1,0 +1,23 @@
+# Development environment. Production packaging lives under deploy/ (not built yet).
+name: factory-erp
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: factoryerp
+      POSTGRES_PASSWORD: factoryerp
+      POSTGRES_DB: factoryerp
+      TZ: UTC
+    ports:
+      - '127.0.0.1:5432:5432' # never expose the database beyond localhost
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U factoryerp -d factoryerp']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  db-data:

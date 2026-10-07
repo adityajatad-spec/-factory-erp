@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+*.tsbuildinfo
+coverage/
+
+# environment & local data
+.env
+.env.*
+!.env.example
+.data/
+*.log
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Factory discovery samples must NEVER be committed (see docs/discovery/)
+FactoryERP-Discovery/
+# Folder name used before the Factory ERP rename — still ignored, for safety.
+FactoryOS-Discovery/

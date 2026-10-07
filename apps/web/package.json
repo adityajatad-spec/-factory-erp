@@ -1,0 +1,37 @@
+{
+  "name": "@factory-erp/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Factory ERP web app (React + Vite PWA shell). Served by the core in production (R2-D1).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "e2e": "tsx --env-file-if-exists=../../.env e2e/run.ts",
+    "e2e:journeys": "tsx e2e/smoke.ts && tsx e2e/receivables.ts && tsx e2e/corrections.ts"
+  },
+  "dependencies": {
+    "@factory-erp/contracts": "workspace:*",
+    "@factory-erp/gst": "workspace:*",
+    "@factory-erp/money": "workspace:*",
+    "@tanstack/react-query": "^5.104.1",
+    "@tanstack/react-router": "^1.170.41",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.19.1",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "pg": "^8.23.1",
+    "playwright-core": "^1.63.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "vite": "^8.3.2"
+  }
+}
