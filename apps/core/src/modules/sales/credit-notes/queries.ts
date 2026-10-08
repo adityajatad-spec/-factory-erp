@@ -17,6 +17,7 @@ export const listCreditNotes = defineQuery({
   input: ListCreditNotesQuery,
   permission: PERMISSIONS.salesInvoiceRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
   handler: async ({ db, companyId }, input): Promise<CreditNoteListItemDto[]> => {
     let q = selectCreditNoteList(db, companyId);
     if (input.status) q = q.where('cn.status', '=', input.status);
@@ -47,6 +48,7 @@ export const getCreditNote = defineQuery({
   input: z.object({ creditNoteId: Uuid }),
   permission: PERMISSIONS.salesInvoiceRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
   handler: async ({ db, companyId }, input): Promise<CreditNoteDto> =>
     loadCreditNoteDto(db, companyId, input.creditNoteId),
 });

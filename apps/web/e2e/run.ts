@@ -6,8 +6,10 @@
  *   3. run every journey: smoke, receivables, corrections
  *   4. stop the server, drop the database, delete the data directory
  *
- * Your development database and apps/core/.data are never touched. Requires `pnpm build` and
- * TEST_DATABASE_ADMIN_URL (an account that may create databases), e.g. from the root .env.
+ * Your development database and apps/core/.data are never touched. Requires `pnpm build`,
+ * TEST_DATABASE_ADMIN_URL (an account that may create databases and owns the e2e schema) and
+ * DATABASE_URL (whose runtime role credentials the server uses), e.g. from the root .env.
+ * Like production, the server gets only the runtime role; seeding runs as the owner.
  *
  *   pnpm build && pnpm --filter @factory-erp/web e2e
  */
@@ -25,18 +27,22 @@ const coreDir = path.resolve(webDir, '../core');
 const DB_NAME = 'factoryerp_e2e';
 const PORT = process.env.E2E_PORT ?? '3100';
 const BASE_URL = `http://127.0.0.1:${PORT}`;
-const JOURNEYS = ['smoke.ts', 'receivables.ts', 'corrections.ts'];
+const JOURNEYS = ['smoke.ts', 'receivables.ts', 'corrections.ts', 'administration.ts'];
 
 const adminUrl = process.env.TEST_DATABASE_ADMIN_URL;
 if (!adminUrl) throw new Error('TEST_DATABASE_ADMIN_URL is not set (see .env.example)');
+const runtimeSource = process.env.DATABASE_URL;
+if (!runtimeSource) throw new Error('DATABASE_URL (runtime role) is not set (see .env.example)');
 for (const built of [path.join(coreDir, 'dist/main.js'), path.join(webDir, 'dist/index.html')]) {
   if (!existsSync(built)) throw new Error(`${built} is missing — run "pnpm build" first`);
 }
-const dbUrl = (() => {
-  const u = new URL(adminUrl);
+const onE2eDb = (url: string) => {
+  const u = new URL(url);
   u.pathname = `/${DB_NAME}`;
   return u.toString();
-})();
+};
+const ownerUrl = onE2eDb(adminUrl);
+const runtimeUrl = onE2eDb(runtimeSource);
 
 async function admin(sql: string): Promise<void> {
   const client = new pg.Client({ connectionString: adminUrl });
@@ -75,10 +81,14 @@ const logFile = path.join(dataDir, 'core.log');
 const env: NodeJS.ProcessEnv = {
   ...process.env,
   NODE_ENV: 'development',
-  DATABASE_URL: dbUrl,
+  DATABASE_URL: runtimeUrl,
   DATA_DIR: dataDir,
   LOG_LEVEL: 'info',
+  // The journeys sign in far more often than a person; per-username backoff is still tested.
+  LOGIN_RATE_LIMIT_PER_MINUTE: '120',
 };
+// The server never sees owner credentials (the dev .env's DATABASE_OWNER_URL points elsewhere).
+delete env.DATABASE_OWNER_URL;
 let server: ChildProcess | undefined;
 let failed = false;
 
@@ -86,7 +96,10 @@ try {
   process.stdout.write(`▶ fresh database ${DB_NAME}, data dir ${dataDir}\n`);
   await admin(`drop database if exists ${DB_NAME} with (force)`);
   await admin(`create database ${DB_NAME}`);
-  await run('pnpm', ['--silent', 'db:seed'], { cwd: coreDir, env: { ...env, LOG_LEVEL: 'warn' } });
+  await run('pnpm', ['--silent', 'db:seed'], {
+    cwd: coreDir,
+    env: { ...env, DATABASE_OWNER_URL: ownerUrl, LOG_LEVEL: 'warn' },
+  });
 
   process.stdout.write(`▶ starting the production build on ${BASE_URL}\n`);
   server = spawn('sh', ['-c', `exec node dist/main.js > "${logFile}" 2>&1`], {

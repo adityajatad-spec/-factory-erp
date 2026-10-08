@@ -8,6 +8,8 @@ export interface AuthenticatedUser {
   sessionId: string;
   roles: readonly RoleCode[];
   permissions: ReadonlySet<Permission>;
+  /** An administrator set this password: only changing it is allowed until then. */
+  mustChangePassword: boolean;
 }
 
 /**

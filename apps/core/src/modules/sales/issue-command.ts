@@ -3,7 +3,7 @@ import { businessDate } from '../../platform/clock';
 import { defineCommand } from '../../platform/commands';
 import { BusinessRuleError, NotFoundError, VersionConflictError } from '../../platform/errors';
 import { toJsonb } from '../../platform/json';
-import { postSalesInvoiceReceivable } from '../finance/ledger';
+import { postSalesInvoiceReceivable } from '../finance';
 import { loadInvoiceDto } from './invoice-dto';
 import { replaceInvoiceLines, totalsColumns } from './invoice-store';
 import { allocateDocumentNumber } from '../../platform/numbering';

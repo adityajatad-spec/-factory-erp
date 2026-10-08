@@ -2,8 +2,7 @@ import rateLimit from '@fastify/rate-limit';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Config } from '../config';
 import type { Database } from '../db/database';
-import type { AuthService } from '../modules/identity/auth-service';
-import { resolveSession, SESSION_COOKIE } from '../modules/identity/sessions';
+import { type AuthService, resolveSession, SESSION_COOKIE } from '../modules/identity';
 import type { Clock } from '../platform/clock';
 import { requireAuthenticated } from '../platform/commands';
 
@@ -36,7 +35,10 @@ export async function registerAuthRoutes(
   };
 
   await app.register(async (scope) => {
-    await scope.register(rateLimit, { max: 10, timeWindow: '1 minute' });
+    await scope.register(rateLimit, {
+      max: deps.config.loginRateLimitPerMinute,
+      timeWindow: '1 minute',
+    });
     scope.post('/auth/login', async (req, reply) => {
       const { token, expiresAt, user } = await deps.auth.login(req.body, {
         requestId: req.id,

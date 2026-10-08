@@ -19,12 +19,11 @@ export const listItems = defineQuery({
   input: ListItemsQuery,
   permission: PERMISSIONS.itemRead,
   ai: { tier: 'READ' },
+  dataClass: 'INTERNAL',
   handler: async ({ db, companyId, now, can }, input): Promise<ItemDto[]> => {
-    let q = selectItems(db, companyId, can(PERMISSIONS.inventoryStockRead)).where(
-      'i.status',
-      '=',
-      'ACTIVE',
-    );
+    let q = selectItems(db, companyId, can(PERMISSIONS.inventoryStockRead));
+    if (input.status === 'active') q = q.where('i.status', '=', 'ACTIVE');
+    if (input.status === 'archived') q = q.where('i.status', '=', 'ARCHIVED');
     if (input.itemType) q = q.where('i.itemType', '=', input.itemType);
     if (input.saleable) q = q.where('i.itemType', 'in', [...SALEABLE_TYPES]);
     if (input.q) {
@@ -42,6 +41,7 @@ export const getItem = defineQuery({
   input: z.object({ itemId: Uuid }),
   permission: PERMISSIONS.itemRead,
   ai: { tier: 'READ' },
+  dataClass: 'INTERNAL',
   handler: async ({ db, companyId, now, can }, input): Promise<ItemDto> => {
     const row = await selectItems(db, companyId, can(PERMISSIONS.inventoryStockRead))
       .where('i.id', '=', input.itemId)
@@ -59,6 +59,7 @@ export const listHsnCodes = defineQuery({
   input: z.object({}),
   permission: PERMISSIONS.itemRead,
   ai: { tier: 'READ' },
+  dataClass: 'PUBLIC', // national reference data
   handler: async ({ db, now }): Promise<HsnCodeDto[]> => {
     const codes = await db
       .selectFrom('catalog.hsnCodes')
@@ -84,6 +85,7 @@ export const listUoms = defineQuery({
   input: z.object({}),
   permission: PERMISSIONS.itemRead,
   ai: { tier: 'READ' },
+  dataClass: 'PUBLIC', // national reference data
   handler: async ({ db }): Promise<UomDto[]> =>
     db.selectFrom('catalog.uoms').select(['code', 'name']).orderBy('code').execute(),
 });

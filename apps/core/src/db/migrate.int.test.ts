@@ -20,7 +20,7 @@ afterAll(async () => {
 
 describe('migration runner', () => {
   it('is a no-op on an up-to-date database', async () => {
-    expect((await migrate(env.databaseUrl, { migrationsDir: dir })).applied).toEqual([]);
+    expect((await migrate(env.ownerUrl, { migrationsDir: dir })).applied).toEqual([]);
   });
 
   it('applies new migrations in order, transactionally', async () => {
@@ -28,7 +28,7 @@ describe('migration runner', () => {
       path.join(dir, '9001_test_extra.sql'),
       'create table system.test_extra (id int primary key);',
     );
-    expect((await migrate(env.databaseUrl, { migrationsDir: dir })).applied).toEqual([
+    expect((await migrate(env.ownerUrl, { migrationsDir: dir })).applied).toEqual([
       '9001_test_extra',
     ]);
   });
@@ -38,11 +38,11 @@ describe('migration runner', () => {
       path.join(dir, '9002_broken.sql'),
       'create table system.half_done (id int); select 1/0;',
     );
-    await expect(migrate(env.databaseUrl, { migrationsDir: dir })).rejects.toBeInstanceOf(
+    await expect(migrate(env.ownerUrl, { migrationsDir: dir })).rejects.toBeInstanceOf(
       MigrationError,
     );
     const { rows } = await import('pg').then(async ({ default: pg }) => {
-      const c = new pg.Client({ connectionString: env.databaseUrl });
+      const c = new pg.Client({ connectionString: env.ownerUrl });
       await c.connect();
       try {
         return await c.query("select to_regclass('system.half_done') as t");
@@ -59,7 +59,7 @@ describe('migration runner', () => {
       path.join(dir, '0001_platform_identity_audit.sql'),
       '\n-- edited after release\n',
     );
-    await expect(migrate(env.databaseUrl, { migrationsDir: dir })).rejects.toThrow(
+    await expect(migrate(env.ownerUrl, { migrationsDir: dir })).rejects.toThrow(
       /modified after being applied/,
     );
   });

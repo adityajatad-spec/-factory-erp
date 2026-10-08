@@ -11,6 +11,10 @@ const REDACT = [
   '*.passwordHash',
   'token',
   '*.token',
+  '*.currentPassword',
+  '*.newPassword',
+  '*.initialPassword',
+  '*.temporaryPassword',
 ];
 
 export function loggerOptions(level: string, pretty: boolean): LoggerOptions {

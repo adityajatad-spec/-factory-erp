@@ -412,17 +412,22 @@ describe('database defence in depth', () => {
     ).rejects.toMatchObject({ code: 'FO003' });
   });
 
-  it('keeps receipts and allocations append-only', async () => {
-    const db = env.services.db;
-    await expect(
-      db.updateTable('finance.receipts').set({ amount: '1.00' }).execute(),
-    ).rejects.toMatchObject({ code: 'FO001' });
-    await expect(db.deleteFrom('finance.receiptAllocations').execute()).rejects.toMatchObject({
-      code: 'FO001',
-    });
-    await expect(sql`truncate finance.receipts cascade`.execute(db)).rejects.toMatchObject({
-      code: 'FO001',
-    });
+  it('keeps receipts and allocations append-only (runtime: no privilege; owner: trigger)', async () => {
+    // The runtime role is refused before any trigger runs; the trigger still binds the owner.
+    for (const [db, code] of [
+      [env.services.db, '42501'],
+      [env.ownerDb, 'FO001'],
+    ] as const) {
+      await expect(
+        db.updateTable('finance.receipts').set({ amount: '1.00' }).execute(),
+      ).rejects.toMatchObject({ code });
+      await expect(db.deleteFrom('finance.receiptAllocations').execute()).rejects.toMatchObject({
+        code,
+      });
+      await expect(sql`truncate finance.receipts cascade`.execute(db)).rejects.toMatchObject({
+        code,
+      });
+    }
   });
 });
 

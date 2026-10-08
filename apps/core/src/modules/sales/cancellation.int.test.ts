@@ -200,9 +200,9 @@ describe('database defence in depth', () => {
     await expect(
       sql`delete from sales.invoices where id = ${inv.id}`.execute(db()),
     ).rejects.toMatchObject({ code: 'FO002' });
-    await expect(
-      sql`delete from finance.party_ledger_entries where source_id = ${inv.id}`.execute(db()),
-    ).rejects.toMatchObject({ code: 'FO001' });
+    const deleteLedger = sql`delete from finance.party_ledger_entries where source_id = ${inv.id}`;
+    await expect(deleteLedger.execute(db())).rejects.toMatchObject({ code: '42501' });
+    await expect(deleteLedger.execute(env.ownerDb)).rejects.toMatchObject({ code: 'FO001' });
   });
 
   it('SQL alone cannot cancel a paid invoice, cancel a draft, or cancel without details', async () => {

@@ -20,5 +20,7 @@ export const ERROR_CODES = {
   duplicate: 'DUPLICATE',
   idempotencyKeyReused: 'IDEMPOTENCY_KEY_REUSED',
   businessRule: 'BUSINESS_RULE_VIOLATION',
+  passwordChangeRequired: 'PASSWORD_CHANGE_REQUIRED',
+  tooManyAttempts: 'TOO_MANY_ATTEMPTS',
   internal: 'INTERNAL_ERROR',
 } as const;

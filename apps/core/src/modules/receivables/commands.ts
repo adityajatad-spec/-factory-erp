@@ -5,7 +5,7 @@ import { defineCommand } from '../../platform/commands';
 import { BusinessRuleError, NotFoundError } from '../../platform/errors';
 import { uuidv7 } from '../../platform/ids';
 import { allocateDocumentNumber } from '../../platform/numbering';
-import { postReceiptToLedger } from '../finance/ledger';
+import { postReceiptToLedger } from '../finance';
 import { applyAllocations, invoiceAuditRecords } from './allocate';
 import { loadReceiptDto } from './receipt-dto';
 

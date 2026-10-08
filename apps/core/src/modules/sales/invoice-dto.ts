@@ -9,7 +9,7 @@ import {
 import { sql } from 'kysely';
 import type { DbExecutor } from '../../db/database';
 import { NotFoundError } from '../../platform/errors';
-import { normalisePercent } from '../catalog/gst-rates';
+import { normalisePercent } from '../catalog';
 import { creditedAmountSql, outstandingOf, paidAmountSql, paymentStatusOf } from './settlement';
 
 const toStatus = (s: string): InvoiceStatus => INVOICE_STATUSES.find((x) => x === s) ?? 'DRAFT';

@@ -32,14 +32,22 @@ export function ItemsPage() {
   const [q, setQ] = useState(search.q ?? '');
   const [itemType, setItemType] = useState<ItemType | ''>('');
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<ItemDto | null>(null);
+  const [status, setStatus] = useState<'active' | 'archived'>('active');
+  const canEdit = can(PERMISSIONS.itemUpdate);
   const debounced = useDebounced(q.trim());
   const searchRef = useRef<HTMLInputElement>(null);
   const showStock = can(PERMISSIONS.inventoryStockRead);
 
   const items = useQuery({
-    queryKey: ['items', 'list', debounced, itemType],
+    queryKey: ['items', 'list', debounced, itemType, status],
     queryFn: () =>
-      api.get<ItemDto[]>('/items', { q: debounced, itemType: itemType || undefined, limit: 200 }),
+      api.get<ItemDto[]>('/items', {
+        q: debounced,
+        itemType: itemType || undefined,
+        status,
+        limit: 200,
+      }),
   });
   useHotkey(
     '/',
@@ -75,6 +83,15 @@ export function ItemsPage() {
                 </option>
               ))}
             </Select>
+            <Select
+              aria-label="Status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as typeof status)}
+              className="w-32"
+            >
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+            </Select>
             <Input
               ref={searchRef}
               value={q}
@@ -103,9 +120,21 @@ export function ItemsPage() {
             </thead>
             <tbody>
               {items.data.map((it) => (
-                <tr key={it.id} className="hover:bg-slate-50">
+                <tr
+                  key={it.id}
+                  className={`hover:bg-slate-50 ${canEdit ? 'cursor-pointer' : ''}`}
+                  onClick={canEdit ? () => setEditing(it) : undefined}
+                  title={canEdit ? 'Edit' : undefined}
+                >
                   <td className={`${td} font-mono text-xs`}>{it.code}</td>
-                  <td className={`${td} font-medium`}>{it.name}</td>
+                  <td className={`${td} font-medium`}>
+                    {it.name}
+                    {it.status === 'ARCHIVED' && (
+                      <span className="ml-2">
+                        <Badge tone="neutral">Archived</Badge>
+                      </span>
+                    )}
+                  </td>
                   <td className={`${td} hidden text-slate-600 md:table-cell`}>
                     {ITEM_TYPE_LABELS[it.itemType]}
                   </td>
@@ -144,6 +173,9 @@ export function ItemsPage() {
         )}
       </Panel>
       <ItemFormDialog open={creating} onClose={() => setCreating(false)} />
+      {editing && (
+        <ItemFormDialog key={editing.id} open item={editing} onClose={() => setEditing(null)} />
+      )}
     </>
   );
 }

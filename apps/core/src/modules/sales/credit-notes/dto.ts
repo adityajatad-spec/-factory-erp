@@ -7,7 +7,7 @@ import {
 } from '@factory-erp/contracts';
 import type { DbExecutor } from '../../../db/database';
 import { NotFoundError } from '../../../platform/errors';
-import { normalisePercent } from '../../catalog/gst-rates';
+import { normalisePercent } from '../../catalog';
 
 const toStatus = (s: string): CreditNoteStatus => (s === 'ISSUED' ? 'ISSUED' : 'DRAFT');
 const toReason = (r: string): CreditNoteReason =>

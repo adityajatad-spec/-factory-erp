@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
+import { ChangePasswordPage } from '../../features/account/change-password-page';
 import { useCan, useSession } from '../../lib/session';
 import { Badge } from '../display';
 import { IconMenu, IconSearch } from '../icons';
@@ -132,10 +133,14 @@ export function AppShell() {
             </kbd>
           </button>
           <div className="flex items-center gap-2">
-            <div className="hidden text-right leading-tight sm:block">
+            <Link
+              to="/account/password"
+              className="hidden rounded px-1 text-right leading-tight hover:bg-slate-100 sm:block"
+              title="Change password"
+            >
               <p className="text-xs font-medium text-slate-800">{session.displayName}</p>
               <p className="text-[10px] text-slate-500">{session.roles.join(', ')}</p>
-            </div>
+            </Link>
             <button
               type="button"
               onClick={() => logout.mutate()}
@@ -146,7 +151,8 @@ export function AppShell() {
           </div>
         </header>
         <main className="min-w-0 flex-1 px-3 py-4 md:px-6">
-          <Outlet />
+          {/* The server refuses everything else until a temporary password is replaced. */}
+          {session.mustChangePassword ? <ChangePasswordPage forced /> : <Outlet />}
         </main>
       </div>
 

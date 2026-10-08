@@ -3,8 +3,7 @@ import type { DbTransaction } from '../../db/database';
 import type { AuditRecord } from '../../platform/audit';
 import { BusinessRuleError } from '../../platform/errors';
 import { uuidv7 } from '../../platform/ids';
-import { outstandingOf } from '../sales/settlement';
-import { lockInvoicesForSettlement } from '../sales/settlement-lock';
+import { lockInvoicesForSettlement, outstandingOf } from '../sales';
 import { checkAllocations, type AllocationRequest, type SettleableInvoice } from './domain';
 
 export interface AppliedAllocation {

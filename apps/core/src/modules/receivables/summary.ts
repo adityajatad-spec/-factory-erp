@@ -56,6 +56,8 @@ export const getReceivablesSummary = defineQuery({
   input: z.object({}),
   permission: PERMISSIONS.receivablesRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
+  examples: [{ description: 'Who owes us money, and how overdue', input: {} }],
   handler: async ({ db, companyId, now }): Promise<ReceivablesSummaryDto> => {
     const asOf = businessDate(now);
     const byCustomer = new Map<string, Acc>();

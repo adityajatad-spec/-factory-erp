@@ -7,6 +7,7 @@ import { IconPlus } from '../../components/icons';
 import { api } from '../../lib/api';
 import { date, inr, num } from '../../lib/format';
 import { useCan, useSession } from '../../lib/session';
+import { FailedJobsBanner } from '../admin/background-jobs-page';
 import { InvoiceTable } from '../invoices/invoice-table';
 
 export function DashboardPage() {
@@ -37,6 +38,7 @@ export function DashboardPage() {
           )
         }
       />
+      <FailedJobsBanner />
       <ErrorBanner error={dashboard.error} className="mb-4" />
       {dashboard.isPending && <Spinner />}
 

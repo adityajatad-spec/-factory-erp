@@ -8,3 +8,6 @@ export * from './credit-notes';
 export * from './receivables';
 export * from './reporting';
 export * from './errors';
+export * from './data-class';
+export * from './users';
+export * from './operations';

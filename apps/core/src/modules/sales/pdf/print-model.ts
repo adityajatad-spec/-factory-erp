@@ -2,7 +2,7 @@ import { CREDIT_NOTE_REASON_LABELS, CREDIT_NOTE_REASONS } from '@factory-erp/con
 import { Dec, Money } from '@factory-erp/money';
 import type { DbExecutor } from '../../../db/database';
 import { NotFoundError } from '../../../platform/errors';
-import { normalisePercent } from '../../catalog/gst-rates';
+import { normalisePercent } from '../../catalog';
 import { CustomerSnapshot, SellerSnapshot } from '../snapshots';
 
 export interface PrintLine {

@@ -53,6 +53,18 @@ export const createInvoiceDraft = defineCommand({
   input: CreateInvoiceDraftRequest,
   permission: PERMISSIONS.salesInvoiceDraft,
   ai: { tier: 'DRAFT' },
+  examples: [
+    {
+      description: 'Draft an invoice for 400 units of one item (a human issues it)',
+      input: {
+        customerId: '01900000-0000-7000-8000-000000000001',
+        invoiceDate: '2026-10-07',
+        lines: [
+          { itemId: '01900000-0000-7000-8000-000000000002', quantity: '400', unitRate: '245' },
+        ],
+      },
+    },
+  ],
   handler: async ({ tx, actor, companyId, now }, input) => {
     const priced = await priceDraft(tx, companyId, input);
     const id = uuidv7(now.getTime());

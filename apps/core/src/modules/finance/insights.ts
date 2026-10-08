@@ -1,6 +1,6 @@
 import { PERMISSIONS } from '@factory-erp/contracts';
 import { sql } from 'kysely';
-import { defineKpi, type KpiDefinition } from '../analytics/insights';
+import { defineKpi, type KpiDefinition } from '../../platform/insights';
 
 export const financeKpis: readonly KpiDefinition[] = [
   defineKpi({

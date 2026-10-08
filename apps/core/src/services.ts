@@ -1,10 +1,13 @@
 import type { Config } from './config';
 import { createDatabase, type Database } from './db/database';
 import type { Logger } from './logger';
-import { AuthService } from './modules/identity/auth-service';
-import { CREDIT_NOTE_ISSUED_TOPIC } from './modules/sales/credit-notes/commands';
-import { INVOICE_ISSUED_TOPIC } from './modules/sales/issue-command';
-import { creditNotePdfHandler, invoicePdfHandler } from './modules/sales/pdf/pdf-handler';
+import { AuthService } from './modules/identity';
+import {
+  CREDIT_NOTE_ISSUED_TOPIC,
+  creditNotePdfHandler,
+  INVOICE_ISSUED_TOPIC,
+  invoicePdfHandler,
+} from './modules/sales';
 import { FileBlobStore, type BlobStore } from './platform/blob-store';
 import { systemClock, type Clock } from './platform/clock';
 import { CommandBus } from './platform/commands';

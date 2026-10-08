@@ -2,11 +2,10 @@ import { PERMISSIONS, type DashboardDto } from '@factory-erp/contracts';
 import { z } from 'zod';
 import { businessDate } from '../../platform/clock';
 import { defineQuery } from '../../platform/queries';
-import { financeKpis } from '../finance/insights';
-import { receivablesKpis } from '../receivables/insights';
-import { selectInvoiceList, toInvoiceListItem } from '../sales/invoice-dto';
-import { salesKpis } from '../sales/insights';
-import type { KpiDefinition } from './insights';
+import { financeKpis } from '../finance';
+import { receivablesKpis } from '../receivables';
+import { salesKpis, selectInvoiceList, toInvoiceListItem } from '../sales';
+import type { KpiDefinition } from '../../platform/insights';
 
 const DISPLAY_ORDER = [
   'sales.today',
@@ -37,6 +36,7 @@ export const getDashboard = defineQuery({
   // Any signed-in user may open the dashboard; each KPI enforces its own permission.
   permission: PERMISSIONS.companyRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
   handler: async ({ db, companyId, now, can }): Promise<DashboardDto> => {
     const date = businessDate(now);
     const visible = KPI_REGISTRY.filter((k) => can(k.permission));

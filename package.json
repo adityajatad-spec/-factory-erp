@@ -21,6 +21,9 @@
     "db:migrate": "pnpm --filter @factory-erp/core db:migrate",
     "db:seed": "pnpm --filter @factory-erp/core db:seed",
     "db:codegen": "pnpm --filter @factory-erp/core db:codegen",
+    "backup": "pnpm --filter @factory-erp/core backup",
+    "backup:verify": "pnpm --filter @factory-erp/core backup:verify",
+    "backup:restore": "pnpm --filter @factory-erp/core backup:restore",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {

@@ -24,3 +24,6 @@ coverage/
 FactoryERP-Discovery/
 # Folder name used before the Factory ERP rename — still ignored, for safety.
 FactoryOS-Discovery/
+
+# Local backups (pnpm backup) — real data, never committed
+.backups/

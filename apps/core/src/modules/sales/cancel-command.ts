@@ -3,7 +3,7 @@ import { formatINR, Money } from '@factory-erp/money';
 import { businessDate } from '../../platform/clock';
 import { defineCommand } from '../../platform/commands';
 import { BusinessRuleError, NotFoundError, VersionConflictError } from '../../platform/errors';
-import { postInvoiceCancellation } from '../finance/ledger';
+import { postInvoiceCancellation } from '../finance';
 import { loadInvoiceDto } from './invoice-dto';
 import { lockInvoicesForSettlement } from './settlement-lock';
 

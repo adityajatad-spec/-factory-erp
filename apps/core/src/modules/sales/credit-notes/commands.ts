@@ -19,7 +19,7 @@ import {
 import { uuidv7 } from '../../../platform/ids';
 import { toJsonb } from '../../../platform/json';
 import { allocateDocumentNumber } from '../../../platform/numbering';
-import { postCreditNoteToLedger } from '../../finance/ledger';
+import { postCreditNoteToLedger } from '../../finance';
 import { totalsColumns } from '../invoice-store';
 import { outstandingOf } from '../settlement';
 import { loadInvoiceableCustomer, loadSeller } from '../snapshots';

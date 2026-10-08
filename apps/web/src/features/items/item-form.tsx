@@ -1,10 +1,12 @@
 import {
   ITEM_TYPES,
+  PERMISSIONS,
   type CreateItemRequest,
   type HsnCodeDto,
   type ItemDto,
   type ItemType,
   type UomDto,
+  type UpdateItemRequest,
 } from '@factory-erp/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
@@ -13,21 +15,52 @@ import { Dialog } from '../../components/dialog';
 import { ErrorBanner } from '../../components/display';
 import { Field, Input, Select } from '../../components/field';
 import { api, ApiError } from '../../lib/api';
+import { useCan } from '../../lib/session';
 import { ITEM_TYPE_LABELS } from './item-types';
 
 const EMPTY = {
   code: '',
   name: '',
+  description: '',
   itemType: 'FINISHED_GOOD' as ItemType,
   uom: 'NOS',
   hsnCode: '',
   defaultSaleRate: '',
 };
 
-export function ItemFormDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+type Form = typeof EMPTY;
+
+function formOf(i: ItemDto): Form {
+  return {
+    code: i.code,
+    name: i.name,
+    description: i.description ?? '',
+    itemType: i.itemType,
+    uom: i.uom,
+    hsnCode: i.hsnCode,
+    defaultSaleRate: i.defaultSaleRate ?? '',
+  };
+}
+
+/**
+ * Create an item, or (with `item`) edit one. The code never changes, and invoices already
+ * issued keep their own line snapshot (HSN, rate, unit). Archiving hides an item from pickers;
+ * the server refuses while a draft invoice still uses it.
+ */
+export function ItemFormDialog({
+  open,
+  onClose,
+  item = null,
+}: {
+  open: boolean;
+  onClose: () => void;
+  item?: ItemDto | null;
+}) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState(EMPTY);
-  const set = (patch: Partial<typeof EMPTY>) => setForm((f) => ({ ...f, ...patch }));
+  const can = useCan();
+  const editing = item !== null;
+  const [form, setForm] = useState<Form>(() => (item ? formOf(item) : EMPTY));
+  const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
   const hsn = useQuery({
     queryKey: ['hsn'],
     queryFn: () => api.get<HsnCodeDto[]>('/reference/hsn-codes'),
@@ -40,16 +73,33 @@ export function ItemFormDialog({ open, onClose }: { open: boolean; onClose: () =
     enabled: open,
   });
 
+  const done = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['items'] });
+    if (!editing) setForm(EMPTY);
+    onClose();
+  };
   const create = useMutation({
     mutationFn: () => {
-      const body: CreateItemRequest = { ...form, defaultSaleRate: form.defaultSaleRate || null };
+      const { code, ...fields } = { ...form, defaultSaleRate: form.defaultSaleRate || null };
+      if (item) {
+        const body: Omit<UpdateItemRequest, 'itemId'> = {
+          ...fields,
+          expectedVersion: item.version,
+        };
+        return api.put<ItemDto>(`/items/${item.id}`, body);
+      }
+      const body: CreateItemRequest = { ...fields, code };
       return api.post<ItemDto>('/items', body);
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['items'] });
-      setForm(EMPTY);
-      onClose();
-    },
+    onSuccess: done,
+  });
+  const archived = item?.status === 'ARCHIVED';
+  const setStatus = useMutation({
+    mutationFn: () =>
+      api.post<ItemDto>(`/items/${item?.id}/${archived ? 'reactivate' : 'archive'}`, {
+        expectedVersion: item?.version,
+      }),
+    onSuccess: done,
   });
   const fieldError = (path: string) =>
     create.error instanceof ApiError
@@ -66,22 +116,38 @@ export function ItemFormDialog({ open, onClose }: { open: boolean; onClose: () =
     <Dialog
       open={open}
       onClose={onClose}
-      title="New item"
+      title={item ? `Edit ${item.code}` : 'New item'}
       wide
       footer={
         <>
+          {item && can(PERMISSIONS.itemUpdate) && (
+            <Button
+              variant={archived ? 'secondary' : 'danger'}
+              className="mr-auto"
+              onClick={() => setStatus.mutate()}
+              disabled={setStatus.isPending}
+            >
+              {archived ? 'Reactivate' : 'Archive'}
+            </Button>
+          )}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" type="submit" form="item-form" disabled={create.isPending}>
-            {create.isPending ? 'Saving…' : 'Create'}
+            {create.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create'}
           </Button>
         </>
       }
     >
       <form id="item-form" onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
-        <Field label="Code" htmlFor="i-code" error={fieldError('code')}>
+        <Field
+          label="Code"
+          htmlFor="i-code"
+          error={fieldError('code')}
+          hint={editing ? 'Codes never change' : undefined}
+        >
           <Input
             id="i-code"
-            autoFocus
+            autoFocus={!editing}
+            disabled={editing}
             value={form.code}
             onChange={(e) => set({ code: e.target.value.toUpperCase() })}
           />
@@ -143,7 +209,20 @@ export function ItemFormDialog({ open, onClose }: { open: boolean; onClose: () =
             onChange={(e) => set({ defaultSaleRate: e.target.value })}
           />
         </Field>
-        <ErrorBanner error={create.error} className="sm:col-span-2" />
+        <Field label="Description" htmlFor="i-desc" error={fieldError('description')}>
+          <Input
+            id="i-desc"
+            value={form.description}
+            onChange={(e) => set({ description: e.target.value })}
+          />
+        </Field>
+        {editing && (
+          <p className="text-xs text-slate-500 sm:col-span-2">
+            Invoices already issued keep the HSN, GST rate and unit they were issued with; drafts
+            pick up these details when next saved.
+          </p>
+        )}
+        <ErrorBanner error={create.error ?? setStatus.error} className="sm:col-span-2" />
       </form>
     </Dialog>
   );

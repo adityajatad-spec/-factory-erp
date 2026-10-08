@@ -11,6 +11,7 @@ export const getCompany = defineQuery({
   input: z.object({}),
   permission: PERMISSIONS.companyRead,
   ai: { tier: 'READ' },
+  dataClass: 'INTERNAL',
   handler: async ({ db, companyId }): Promise<CompanyDto> => {
     const c = await db
       .selectFrom('platform.companies as c')
@@ -45,6 +46,7 @@ export const listStates = defineQuery({
   input: z.object({}),
   permission: PERMISSIONS.companyRead,
   ai: { tier: 'READ' },
+  dataClass: 'PUBLIC', // national reference data
   handler: async ({ db }): Promise<StateDto[]> =>
     db.selectFrom('platform.states').select(['code', 'name']).orderBy('name').execute(),
 });

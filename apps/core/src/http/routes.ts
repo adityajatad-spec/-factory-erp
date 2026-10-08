@@ -1,30 +1,59 @@
-import type { FastifyInstance } from 'fastify';
-import { listAuditEvents } from '../modules/audit/queries';
-import { getDashboard } from '../modules/analytics/dashboard';
-import { createItem } from '../modules/catalog/commands';
-import { getItem, listHsnCodes, listItems, listUoms } from '../modules/catalog/queries';
-import { getCompany, listStates } from '../modules/company/queries';
-import { getDocumentContentQuery } from '../modules/documents/queries';
-import { createParty } from '../modules/parties/commands';
-import { getParty, listParties } from '../modules/parties/queries';
-import { allocateReceipt, recordReceipt } from '../modules/receivables/commands';
-import { getReceipt, listOpenInvoices, listReceipts } from '../modules/receivables/queries';
-import { getReceivablesSummary } from '../modules/receivables/summary';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { listAuditEvents } from '../modules/audit';
+import { getDashboard } from '../modules/analytics';
 import {
-  createInvoiceDraft,
-  deleteInvoiceDraft,
-  updateInvoiceDraft,
-} from '../modules/sales/draft-commands';
-import { cancelInvoice } from '../modules/sales/cancel-command';
+  archiveItem,
+  createItem,
+  getItem,
+  listHsnCodes,
+  listItems,
+  listUoms,
+  reactivateItem,
+  updateItem,
+} from '../modules/catalog';
+import { getCompany, listStates } from '../modules/company';
+import { getDocumentContentQuery } from '../modules/documents';
+import { listOutboxEvents, retryOutboxEvent } from '../modules/operations';
 import {
+  changeOwnPassword,
+  createUser,
+  deactivateUser,
+  listUsers,
+  reactivateUser,
+  resetUserPassword,
+  setUserRoles,
+} from '../modules/identity';
+import {
+  archiveParty,
+  createParty,
+  getParty,
+  listParties,
+  reactivateParty,
+  updateParty,
+} from '../modules/parties';
+import {
+  allocateReceipt,
+  getReceipt,
+  getReceivablesSummary,
+  listOpenInvoices,
+  listReceipts,
+  recordReceipt,
+} from '../modules/receivables';
+import {
+  cancelInvoice,
   createCreditNoteDraft,
+  createInvoiceDraft,
   deleteCreditNoteDraft,
+  deleteInvoiceDraft,
+  getCreditNote,
+  getInvoice,
   issueCreditNote,
+  issueInvoice,
+  listCreditNotes,
+  listInvoices,
   updateCreditNoteDraft,
-} from '../modules/sales/credit-notes/commands';
-import { getCreditNote, listCreditNotes } from '../modules/sales/credit-notes/queries';
-import { issueInvoice } from '../modules/sales/issue-command';
-import { getInvoice, listInvoices } from '../modules/sales/queries';
+  updateInvoiceDraft,
+} from '../modules/sales';
 import type { BlobStore } from '../platform/blob-store';
 import type { CommandBus } from '../platform/commands';
 import type { QueryBus } from '../platform/queries';
@@ -50,11 +79,19 @@ export function registerBusinessRoutes(
   app.get('/parties', queryRoute(q, listParties, queryString));
   app.get('/parties/:partyId', queryRoute(q, getParty, params));
   app.post('/parties', commandRoute(c, createParty, body, 201));
+  const partyId = (req: FastifyRequest) => ({ ...body(req), partyId: params(req).partyId });
+  app.put('/parties/:partyId', commandRoute(c, updateParty, partyId));
+  app.post('/parties/:partyId/archive', commandRoute(c, archiveParty, partyId));
+  app.post('/parties/:partyId/reactivate', commandRoute(c, reactivateParty, partyId));
 
   // Items
   app.get('/items', queryRoute(q, listItems, queryString));
   app.get('/items/:itemId', queryRoute(q, getItem, params));
   app.post('/items', commandRoute(c, createItem, body, 201));
+  const itemId = (req: FastifyRequest) => ({ ...body(req), itemId: params(req).itemId });
+  app.put('/items/:itemId', commandRoute(c, updateItem, itemId));
+  app.post('/items/:itemId/archive', commandRoute(c, archiveItem, itemId));
+  app.post('/items/:itemId/reactivate', commandRoute(c, reactivateItem, itemId));
 
   // Sales invoices
   app.get('/sales-invoices', queryRoute(q, listInvoices, queryString));
@@ -140,6 +177,23 @@ export function registerBusinessRoutes(
       .header('cache-control', 'private, max-age=3600, immutable')
       .send(doc.content);
   });
+
+  // Users (administration) and your own account
+  app.get('/users', queryRoute(q, listUsers));
+  app.post('/users', commandRoute(c, createUser, body, 201));
+  const userId = (req: FastifyRequest) => ({ ...body(req), userId: params(req).userId });
+  app.put('/users/:userId/roles', commandRoute(c, setUserRoles, userId));
+  app.post('/users/:userId/deactivate', commandRoute(c, deactivateUser, userId));
+  app.post('/users/:userId/reactivate', commandRoute(c, reactivateUser, userId));
+  app.post('/users/:userId/reset-password', commandRoute(c, resetUserPassword, userId));
+  app.post('/account/password', commandRoute(c, changeOwnPassword, body));
+
+  // Operations: background jobs
+  app.get('/operations/outbox', queryRoute(q, listOutboxEvents, queryString));
+  app.post(
+    '/operations/outbox/:eventId/retry',
+    commandRoute(c, retryOutboxEvent, (req) => ({ eventId: params(req).eventId })),
+  );
 
   // Audit & dashboard
   app.get('/audit-events', queryRoute(q, listAuditEvents, queryString));

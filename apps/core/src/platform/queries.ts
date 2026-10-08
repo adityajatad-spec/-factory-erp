@@ -1,13 +1,14 @@
-import type { Permission } from '@factory-erp/contracts';
+import type { DataClass, Permission } from '@factory-erp/contracts';
 import type { z } from 'zod';
 import type { Database } from '../db/database';
 import type { Actor, AuthenticatedActor } from './actor';
 import type { Clock } from './clock';
 import { requireAuthenticated } from './commands';
-import { ForbiddenError, ValidationError } from './errors';
+import { ForbiddenError, PasswordChangeRequiredError, ValidationError } from './errors';
 import { zodIssues } from './validation';
 
 export interface QueryContext {
+  /** A read-only, repeatable-read transaction: every read in one query sees one snapshot. */
   db: Database;
   actor: AuthenticatedActor;
   companyId: string;
@@ -23,8 +24,18 @@ export interface QueryDefinition<S extends z.ZodType, R> {
   permission: Permission;
   /** READ: the AI copilot may call it (as the user). FORBIDDEN: never exposed to AI. */
   ai: { tier: 'READ' | 'FORBIDDEN' };
-  handler: (ctx: QueryContext, input: z.output<S>) => Promise<R>;
+  /**
+   * How sensitive the RESULT is (docs/ROADMAP.md §5.5). The AI gateway will route on it:
+   * a session that has seen CONFIDENTIAL results only talks to models allowed CONFIDENTIAL.
+   */
+  dataClass: DataClass;
+  /** Sample inputs: future tool descriptions and evaluation cases (validated by a test). */
+  examples?: readonly { description: string; input: NoInfer<z.input<S>> }[];
+  handler(ctx: QueryContext, input: z.output<S>): Promise<R>;
 }
+
+/** Any query, for registries (src/registry.ts). */
+export type AnyQuery = QueryDefinition<z.ZodType, unknown>;
 
 export function defineQuery<S extends z.ZodType, R>(
   def: QueryDefinition<S, R>,
@@ -51,20 +62,26 @@ export class QueryBus {
 
     const authed = requireAuthenticated(actor);
     const permissions = authed.user.permissions;
+    if (authed.user.mustChangePassword) throw new PasswordChangeRequiredError();
     if (!permissions.has(query.permission)) throw new ForbiddenError(query.permission);
     if (authed.actorKind === 'ai_agent' && query.ai.tier !== 'READ') {
       throw new ForbiddenError(`${query.name} is not available to the AI copilot`);
     }
 
-    return query.handler(
-      {
-        db: this.#db,
-        actor: authed,
-        companyId: authed.user.companyId,
-        now: this.#clock.now(),
-        can: (p) => permissions.has(p),
-      },
-      parsed.data,
-    );
+    // One consistent snapshot per query: a report that reads several tables can never combine
+    // figures from two different moments. READ ONLY also makes a query that tries to write
+    // fail at once (the architecture test forbids it statically too).
+    const companyId = authed.user.companyId;
+    const now = this.#clock.now();
+    return this.#db
+      .transaction()
+      .setIsolationLevel('repeatable read')
+      .setAccessMode('read only')
+      .execute((tx) =>
+        query.handler(
+          { db: tx, actor: authed, companyId, now, can: (p) => permissions.has(p) },
+          parsed.data,
+        ),
+      );
   }
 }

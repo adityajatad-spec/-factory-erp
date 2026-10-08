@@ -1,7 +1,7 @@
 import { PERMISSIONS } from '@factory-erp/contracts';
 import { financialYearOf } from '@factory-erp/gst';
 import { sql } from 'kysely';
-import { defineKpi, type KpiDefinition } from '../analytics/insights';
+import { defineKpi, type KpiDefinition } from '../../platform/insights';
 
 export const salesKpis: readonly KpiDefinition[] = [
   defineKpi({

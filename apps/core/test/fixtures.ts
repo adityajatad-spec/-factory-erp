@@ -18,9 +18,18 @@ export interface Fixture {
   items: { widget: ItemDto; carton: ItemDto; rawMaterial: ItemDto };
 }
 
-/** Minimal synthetic company: roles, three users, two customers (intra/inter-state), items. */
-export async function createFixture(services: Services): Promise<Fixture> {
+/**
+ * Minimal synthetic company: roles, three users, two customers (intra/inter-state), items.
+ * A `tag` makes a second, independent company in the same database (usernames, names and the
+ * company GSTIN carry the tag; party and item codes repeat on purpose — they are per company).
+ */
+export async function createFixture(
+  services: Services,
+  opts: { tag?: string } = {},
+): Promise<Fixture> {
   const { db } = services;
+  const tag = opts.tag ? ` ${opts.tag}` : '';
+  const userSuffix = opts.tag ? `-${opts.tag}` : '';
   await syncRoles(services);
   const companyId = uuidv7();
   const passwordHash = await hashPassword(TEST_PASSWORD);
@@ -29,8 +38,8 @@ export async function createFixture(services: Services): Promise<Fixture> {
     .insertInto('platform.companies')
     .values({
       id: companyId,
-      legalName: 'Test Works Pvt Ltd',
-      gstin: '27TESTO0001A1Z1',
+      legalName: `Test Works${tag} Pvt Ltd`,
+      gstin: `27TEST${(opts.tag?.[0] ?? 'o').toUpperCase()}0001A1Z1`,
       stateCode: '27',
       addressLine1: 'Test Road',
       city: 'Pune',
@@ -50,10 +59,14 @@ export async function createFixture(services: Services): Promise<Fixture> {
     ['4819', '5'],
     ['7208', '18'],
   ] as const) {
-    await db
+    // HSN codes and rates are national reference data, shared by every company.
+    const added = await db
       .insertInto('catalog.hsnCodes')
       .values({ code, description: `HSN ${code}` })
-      .execute();
+      .onConflict((oc) => oc.column('code').doNothing())
+      .returning('code')
+      .executeTakeFirst();
+    if (!added) continue;
     await db
       .insertInto('catalog.gstRates')
       .values({
@@ -67,8 +80,9 @@ export async function createFixture(services: Services): Promise<Fixture> {
       .execute();
   }
 
-  const actor = async (username: string, role: RoleCode): Promise<AuthenticatedActor> => {
+  const actor = async (name: string, role: RoleCode): Promise<AuthenticatedActor> => {
     const id = uuidv7();
+    const username = `${name}${userSuffix}`;
     await db
       .insertInto('identity.users')
       .values({ id, username, displayName: username, passwordHash })
@@ -86,9 +100,10 @@ export async function createFixture(services: Services): Promise<Fixture> {
         username,
         displayName: username,
         companyId,
-        sessionId: 'test',
+        sessionId: uuidv7(),
         roles: access.roles,
         permissions: access.permissions,
+        mustChangePassword: false,
       },
     };
   };
@@ -103,7 +118,7 @@ export async function createFixture(services: Services): Promise<Fixture> {
     createParty,
     {
       code: 'C-INTRA',
-      name: 'Intra Customer',
+      name: `Intra Customer${tag}`,
       isCustomer: true,
       isSupplier: false,
       gstin: '27TESTO0002B1Z2',
@@ -115,7 +130,7 @@ export async function createFixture(services: Services): Promise<Fixture> {
     createParty,
     {
       code: 'C-INTER',
-      name: 'Inter Customer',
+      name: `Inter Customer${tag}`,
       isCustomer: true,
       isSupplier: false,
       gstin: '24TESTO0003C1Z3',
@@ -127,7 +142,7 @@ export async function createFixture(services: Services): Promise<Fixture> {
     createItem,
     {
       code: 'W-1',
-      name: 'Widget',
+      name: `Widget${tag}`,
       itemType: 'FINISHED_GOOD',
       uom: 'NOS',
       hsnCode: '7326',
@@ -137,12 +152,18 @@ export async function createFixture(services: Services): Promise<Fixture> {
   );
   const carton = await c.execute(
     createItem,
-    { code: 'CTN', name: 'Carton', itemType: 'COMPONENT', uom: 'NOS', hsnCode: '4819' },
+    { code: 'CTN', name: `Carton${tag}`, itemType: 'COMPONENT', uom: 'NOS', hsnCode: '4819' },
     actors.owner,
   );
   const rawMaterial = await c.execute(
     createItem,
-    { code: 'RM-1', name: 'Steel Sheet', itemType: 'RAW_MATERIAL', uom: 'KGS', hsnCode: '7208' },
+    {
+      code: 'RM-1',
+      name: `Steel Sheet${tag}`,
+      itemType: 'RAW_MATERIAL',
+      uom: 'KGS',
+      hsnCode: '7208',
+    },
     actors.owner,
   );
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { RateString, SearchQuery } from './common';
+import { RateString, SearchQuery, Uuid } from './common';
+import { MasterStatusFilter } from './parties';
 
 export const ITEM_TYPES = [
   'RAW_MATERIAL',
@@ -11,12 +12,8 @@ export const ITEM_TYPES = [
 ] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
-export const CreateItemRequest = z.object({
-  code: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z0-9-]{2,30}$/, 'Code: 2–30 letters, digits or hyphens'),
+/** Everything about an item except its code, which never changes once created. */
+const ItemFields = z.object({
   name: z.string().trim().min(2).max(200),
   description: z
     .string()
@@ -34,7 +31,29 @@ export const CreateItemRequest = z.object({
     .optional()
     .transform((v) => (v ? v : null)),
 });
+
+export const CreateItemRequest = ItemFields.extend({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9-]{2,30}$/, 'Code: 2–30 letters, digits or hyphens'),
+});
 export type CreateItemRequest = z.input<typeof CreateItemRequest>;
+
+/** Edit an item. The code is not editable; issued documents keep their own line snapshot. */
+export const UpdateItemRequest = ItemFields.extend({
+  itemId: Uuid,
+  expectedVersion: z.number().int().positive(),
+});
+export type UpdateItemRequest = z.input<typeof UpdateItemRequest>;
+
+/** Archive or reactivate an item. */
+export const ItemStatusRequest = z.object({
+  itemId: Uuid,
+  expectedVersion: z.number().int().positive(),
+});
+export type ItemStatusRequest = z.input<typeof ItemStatusRequest>;
 
 export const ListItemsQuery = SearchQuery.extend({
   itemType: z.enum(ITEM_TYPES).optional(),
@@ -43,6 +62,7 @@ export const ListItemsQuery = SearchQuery.extend({
     .enum(['true', 'false'])
     .optional()
     .transform((v) => v === 'true'),
+  status: MasterStatusFilter,
 });
 export type ListItemsQuery = z.input<typeof ListItemsQuery>;
 

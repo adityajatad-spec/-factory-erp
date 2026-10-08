@@ -54,6 +54,7 @@ export const listAuditEvents = defineQuery({
   input: ListAuditEventsQuery,
   permission: PERMISSIONS.auditRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
   handler: async ({ db, companyId }, input): Promise<AuditEventDto[]> => {
     const rows = await db
       .selectFrom('audit.events as e')

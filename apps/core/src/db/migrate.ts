@@ -56,6 +56,12 @@ async function loadMigrations(dir: string): Promise<MigrationFile[]> {
   return result;
 }
 
+/** The newest migration version shipped with this build, e.g. "0007". */
+export async function latestMigrationVersion(migrationsDir?: string): Promise<string | null> {
+  const migrations = await loadMigrations(migrationsDir ?? defaultMigrationsDir());
+  return migrations.at(-1)?.version ?? null;
+}
+
 export async function migrate(
   databaseUrl: string,
   opts: { migrationsDir?: string; logger?: Pick<Logger, 'info'> } = {},

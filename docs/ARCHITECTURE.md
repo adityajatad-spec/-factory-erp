@@ -14,6 +14,7 @@
 | v0.2 | 2026-10-05 | Architecture Review Round 2: decisions confirmed and deferred, Factory V1 / SaaS Later boundary, revised topology, version-agnostic stack, regulatory verification register, CA validation gate, outage matrix, hardware-adaptive AI, hostile review, discovery questionnaire and data checklist |
 | v0.3 | 2026-10-05 | **Building started.** Discovery deferred (surprise prototype). Phase 0 foundation and the first vertical slice are implemented: auth/RBAC → parties → items → invoice draft → GST → issue → PDF → audit → dashboard. See the README. |
 | v0.4 | 2026-10-07 | Renamed **Factory ERP**. Sales-to-cash receivables loop and the **sales correction path** (invoice cancellation, credit notes) implemented — see `docs/adr/0002-sales-correction-path.md`. G.2 updated: invoice cancellation is CONFIRM. |
+| v0.5 | 2026-10-07 | **Slice 0 — hardening** (see `docs/ROADMAP.md` §11). Least-privilege runtime database role (P), backup and restore with a restore drill, module rules now enforced by a test (E.3), multi-company isolation harness, master-data editing and user administration, document access derived from the owning record, outbox failure handling, one read-only snapshot per query, and the AI seams (`dataClass` on queries, RESTRICTED fields, `packages/ai` with the pure routing policy, G.1). Jobs use the transactional outbox, not pg-boss (ADR 0001). |
 
 **How to read this document:**
 - Sections A–S are the base proposal, already edited for Round 2.
@@ -72,7 +73,7 @@ These are placeholders. Factory Discovery (Round 2 §11) replaces them with fact
 | Database | PostgreSQL: a supported major release with at least 3 years of community support left, chosen at ADR time | Transactional DDL, rich constraints, NUMERIC, JSONB, full-text search and `pg_trgm`, all present in every supported major. UUIDv7 is generated **in the application**, so no particular major is needed. Runs on modest hardware. | MySQL. SQLite is great locally but weak for concurrent multi-user writes and has no server roles. MongoDB is ruled out. |
 | Database access | Kysely (typed SQL builder) with kysely-codegen, and migrations in plain SQL | The database schema is the source of truth and the types are generated from it. No ORM magic sits between us and financial queries. | Prisma has a heavier runtime and weaker support for constraints and triggers. Drizzle is fine, but defining the schema in TypeScript inverts our "database first" approach. |
 | Decimal math | `decimal.js` wrapped in `Money`, `Qty` and `Rate` value types | The JavaScript `number` type is forbidden for money and quantities | Integer paise is workable, but rates and per-kg prices need more decimal places. |
-| Jobs and queue | pg-boss (backed by Postgres) | Durable jobs and cron without adding Redis | BullMQ with Redis. Temporal is overkill. |
+| Jobs and queue | **As built:** a transactional outbox table in Postgres, polled with `FOR UPDATE SKIP LOCKED` (ADR 0001). pg-boss only if scheduling needs outgrow it. | Durable jobs without adding Redis; the outbox commits with the business change | BullMQ with Redis. Temporal is overkill. |
 | Realtime | **V1:** short polling, or Server-Sent Events if needed. **Later, with chat:** WebSocket from core plus Postgres `LISTEN/NOTIFY`. | V1 notifications and dashboards don't need sub-second push (Round 2 §10.2) | A separate pub/sub broker |
 | Web app | React and Vite SPA with TanStack Router, Query and Table, shadcn/ui with Tailwind, installable as a PWA | The same bundle is served on the LAN and remotely, with an offline shell and no SSR server | Next.js needs an SSR runtime we don't need. Native mobile apps can come later, if ever. |
 | PDF | Typed React templates rendered to static HTML, then printed by headless Chromium (Playwright) | Familiar HTML and CSS, print CSS and correct shaping of Indic scripts | Typst is lighter and worth revisiting. pdfmake and React-PDF have layout limits. |
@@ -82,7 +83,7 @@ These are placeholders. Factory Discovery (Round 2 §11) replaces them with fact
 | LLM runtime | Any local runtime with an OpenAI-compatible API. Candidates are Ollama, llama.cpp server and vLLM, **chosen after benchmarking the factory hardware**. A cloud provider sits behind the same gateway, used only where policy allows. | The architecture depends on the API shape, not on a product or version | Bespoke runtimes |
 | Backups | pgBackRest for the database (point-in-time recovery, encrypted) and restic for files, both going to S3-compatible object storage in an India region with object lock | Point-in-time recovery that resists ransomware | A nightly `pg_dump` alone. It is kept as a secondary copy. |
 | Packaging | Docker Compose on Ubuntu Server LTS | Reproducible. The same images run in dev, staging, the factory and cloud nodes. | Kubernetes is ruled out. Bare installs drift. |
-| Repo tooling | pnpm workspaces, ESLint and Prettier, dependency-cruiser for module boundaries, GitHub Actions | | Nx and Turborepo aren't needed at this size. |
+| Repo tooling | pnpm workspaces, ESLint and Prettier, an architecture test for module boundaries (no extra tool), GitHub Actions | | Nx and Turborepo aren't needed at this size. |
 | Tests | Vitest, fast-check (property tests), Testcontainers (real Postgres), Playwright (E2E), pytest | | Database mocks. We test against real Postgres. |
 
 **Version policy:** this table fixes component *families* only.
@@ -317,20 +318,22 @@ apps/core/src/modules/sales/
 ```
 `apps/core/src/platform/` holds the cross-cutting infrastructure: command bus, auth, RBAC, audit, outbox, jobs, database, config and logging.
 
-### E.3 Module rules (dependency-cruiser enforces them in CI)
-- A module writes only to its own schema.
-- Other modules are reached only through their `index.ts`.
-- `domain/` imports nothing from `infra/`, `http/` or any framework.
-- **Invariants that span modules commit in one transaction** through synchronous public calls. Issuing an invoice, posting its journal and moving stock is one example. Side effects that may lag, such as PDFs, notifications, e-invoices and sync, go through the **outbox**.
-- **Layering:** each layer may use only the layers below it.
-  1. platform
-  2. parties · catalog · finance-core (chart of accounts and the journal posting API)
-  3. inventory
-  4. purchase · sales · production · maintenance · quality · workforce · documents · collaboration
-  5. analytics
-  6. ai
+### E.3 Module rules (enforced by `apps/core/src/architecture.test.ts`)
+**As built (Slice 0)** — a small test over the source, not a dependency-analysis tool:
+- **A module writes only the tables it owns** (`TABLE_OWNERS`, one owner per table; every table in the schema must have one). Writes happen on the transaction the command bus (or an outbox handler) provides; modules do not open their own.
+- **Other modules are reached only through their `index.ts`**, and there are no dependency cycles between modules.
+- **Invariants that span modules commit in one transaction** through the owning module's public functions — for example, issuing an invoice calls the finance module to post the customer ledger, and the PDF handler calls the documents module to record the PDF. Side effects that may lag, such as PDFs, notifications, e-invoices and sync, go through the **outbox**; commands may not render PDFs or write blobs.
+- **Reads may cross modules** (queries and views join freely, read-only). Query files never write, and every query runs in a read-only snapshot.
+- **Platform and `db/` never depend on business modules.** Business modules never import AI code; AI code reaches business data only through the buses and module APIs, never the database.
+- Not adopted: a separate `domain/` vs `infra/` folder inside each module. Pure rules live in their own files (for example `sales/credit-notes/rules.ts`), which has been enough so far.
 
-  A dependency cycle fails the build.
+**Intended layering** (each layer may use only the layers below it; modules not built yet in italics):
+  1. platform
+  2. parties · catalog · finance (customer ledger) · documents · identity · company
+  3. *inventory*
+  4. sales · receivables · *purchase · production · maintenance · quality · workforce · collaboration*
+  5. analytics · operations
+  6. *ai*
 
 ### E.4 The command bus is the spine
 Every mutation is registered exactly once:
@@ -435,7 +438,7 @@ user ─▶ Agent runtime (in core) ─▶ LLM gateway ─▶ local runtime (Oll
             ▼
       Tool registry ─▶ Command / Query bus  (same validation, RBAC, audit as HTTP)
 ```
-- **LLM gateway:** one interface over local and cloud models. It routes by task, data sensitivity and availability, and it enforces timeouts, token budgets and redaction. It logs every request and response locally.
+- **LLM gateway:** one interface over local and cloud models. It routes by task, data sensitivity and availability, and it enforces timeouts, token budgets and redaction. It logs every request and response locally. **As built (Slice 0):** the interfaces (`AiGateway`, `ProviderAdapter`) and the pure, property-tested routing policy live in `packages/ai`; every query declares the `dataClass` of its result and credential fields are marked RESTRICTED in the contracts. No provider adapter exists yet. Business modules may not import AI code, and AI code may not import the database — `apps/core/src/architecture.test.ts` enforces both (docs/ROADMAP.md §5).
 - **Tool registry:** generated from the command and query registries, with JSON Schema from Zod plus descriptions and examples. For each request it is **filtered to the tools the current user may use**. It could later be exposed over MCP for external agents.
 - **Agent runtime:** a small, explicit loop with a maximum number of steps, tool calls and wall time. We own this code and use no orchestration framework.
 - **Action cards:** the UI renders consequential results from persisted drafts, never from model text.
@@ -523,7 +526,7 @@ upload (web, phone camera; later email/WhatsApp)
 
 ### H.2 Runtime and isolation
 - `llm` and `docai` run as separate containers with CPU and memory limits, so inference can never starve Postgres or the API.
-- AI work goes through a pg-boss queue with concurrency 1 on small hardware. Interactive chat takes priority over batch OCR.
+- Batch AI work (OCR, extraction) goes through the transactional outbox with concurrency 1 on small hardware (ADR 0001; there is no pg-boss). Interactive chat takes priority over batch OCR.
 - Models are pinned by digest. Upgrading a model is a release, and it must pass the eval suite.
 - **Specific models are chosen at implementation time** by benchmarking open-weight models with tool calling and Indic-language support against our eval sets. The field changes too fast to pick now.
 
@@ -751,7 +754,8 @@ The control plane runs on a managed cloud in an India region. Cloud-hosted nodes
 | Threat | Controls |
 |---|---|
 | Ransomware on the factory network | Server isolated from office PCs (separate VLAN, or at least no SMB shares), no inbound ports, full-disk encryption, and **immutable off-site backups (object lock)** with restore drills |
-| Stolen or phished remote credentials | TOTP for privileged roles and every remote session, rate limiting, lockout, login alerts, session and device revocation, and LAN-only roles |
+| Stolen or phished remote credentials | TOTP for privileged roles and every remote session, rate limiting, lockout, login alerts, session and device revocation, and LAN-only roles. **As built:** per-IP rate limit, per-username backoff (also for unknown usernames), every attempt recorded and refusals of known users audited, sessions revoked on deactivation and password reset. TOTP is still to come. |
+| A compromised or buggy application process | **As built:** the server connects as a least-privilege runtime role: no DDL, no `TRUNCATE`, no trigger changes, no `session_replication_role`, and no update or delete on append-only tables. Migrations and backups use a separate owner connection the production server never holds. A privilege test guards against drift. |
 | Insider fraud (edited invoices, fake suppliers, changed bank details) | Posted documents are immutable. Payments and supplier bank-detail changes need maker-checker. The audit log is hash-chained, and high-risk events alert the owner. |
 | Over-broad access to salaries, costs and customers | Fine-grained permissions, scopes, field masking and permission-matrix tests |
 | AI misuse and prompt injection | The AI acts as the user, within risk tiers and behind human confirmation. Untrusted content is isolated from tool calling, there is no SQL access, and the AI audit trail is complete. |

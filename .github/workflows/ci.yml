@@ -14,22 +14,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: factoryerp
-          POSTGRES_PASSWORD: factoryerp
-          POSTGRES_DB: factoryerp
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U factoryerp -d factoryerp"
-          --health-interval 2s --health-timeout 3s --health-retries 30
-
     env:
       NODE_ENV: test
-      DATABASE_URL: postgres://factoryerp:factoryerp@127.0.0.1:5432/factoryerp
+      # Runtime role (created by db:migrate) and schema owner — the same split as production.
+      DATABASE_URL: postgres://factoryerp_app:factoryerp_app@127.0.0.1:5432/factoryerp
+      DATABASE_OWNER_URL: postgres://factoryerp:factoryerp@127.0.0.1:5432/factoryerp
       TEST_DATABASE_ADMIN_URL: postgres://factoryerp:factoryerp@127.0.0.1:5432/postgres
       # GitHub's Ubuntu runners ship Google Chrome; used for invoice PDFs and the e2e smoke test.
       PDF_BROWSER_EXECUTABLE: /usr/bin/google-chrome
@@ -45,6 +34,11 @@ jobs:
         run: corepack enable
 
       - run: pnpm install --frozen-lockfile
+
+      # The same Compose service as development: the backup tests run pg_dump/pg_restore
+      # inside it, so client and server versions always match.
+      - name: Start PostgreSQL
+        run: pnpm db:up
 
       - name: Format
         run: pnpm format:check

@@ -84,6 +84,7 @@ export async function resolveSession(
       'u.id as userId',
       'u.username',
       'u.displayName',
+      'u.mustChangePassword',
     ])
     .where('s.tokenHash', '=', hashToken(token))
     .where('s.revokedAt', 'is', null)
@@ -109,5 +110,6 @@ export async function resolveSession(
     sessionId: row.sessionId,
     roles: access.roles,
     permissions: access.permissions,
+    mustChangePassword: row.mustChangePassword,
   };
 }

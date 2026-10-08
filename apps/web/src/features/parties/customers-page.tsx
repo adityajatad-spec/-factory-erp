@@ -15,7 +15,7 @@ import {
   tdNum,
   th,
 } from '../../components/display';
-import { Input } from '../../components/field';
+import { Input, Select } from '../../components/field';
 import { IconPlus } from '../../components/icons';
 import { api } from '../../lib/api';
 import { inr } from '../../lib/format';
@@ -30,13 +30,23 @@ export function CustomersPage() {
   const search = route.useSearch();
   const [q, setQ] = useState(search.q ?? '');
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<PartyDto | null>(null);
+  const [role, setRole] = useState<'' | 'customer' | 'supplier'>('');
+  const [status, setStatus] = useState<'active' | 'archived'>('active');
+  const canEdit = can(PERMISSIONS.partyUpdate);
   const debounced = useDebounced(q.trim());
   const searchRef = useRef<HTMLInputElement>(null);
   const showBalance = can(PERMISSIONS.receivablesRead);
 
   const parties = useQuery({
-    queryKey: ['parties', 'list', debounced],
-    queryFn: () => api.get<PartyDto[]>('/parties', { q: debounced, limit: 200 }),
+    queryKey: ['parties', 'list', debounced, role, status],
+    queryFn: () =>
+      api.get<PartyDto[]>('/parties', {
+        q: debounced,
+        role: role || undefined,
+        status,
+        limit: 200,
+      }),
   });
   useHotkey(
     '/',
@@ -58,15 +68,36 @@ export function CustomersPage() {
       />
       <Panel
         actions={
-          <Input
-            ref={searchRef}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name, code, GSTIN  ( / )"
-            className="w-64 sm:w-80"
-          />
+          <>
+            <Select
+              aria-label="Role"
+              value={role}
+              onChange={(e) => setRole(e.target.value as typeof role)}
+              className="w-36"
+            >
+              <option value="">All parties</option>
+              <option value="customer">Customers</option>
+              <option value="supplier">Suppliers</option>
+            </Select>
+            <Select
+              aria-label="Status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as typeof status)}
+              className="w-32"
+            >
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+            </Select>
+            <Input
+              ref={searchRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search name, code, GSTIN  ( / )"
+              className="w-48 sm:w-64"
+            />
+          </>
         }
-        title={`${parties.data?.length ?? 0} parties`}
+        title={`${parties.data?.length ?? 0} ${status === 'archived' ? 'archived ' : ''}parties`}
       >
         <ErrorBanner error={parties.error} className="m-3" />
         {parties.isPending ? (
@@ -87,13 +118,19 @@ export function CustomersPage() {
             </thead>
             <tbody>
               {parties.data.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50">
+                <tr
+                  key={p.id}
+                  className={`hover:bg-slate-50 ${canEdit ? 'cursor-pointer' : ''}`}
+                  onClick={canEdit ? () => setEditing(p) : undefined}
+                  title={canEdit ? 'Edit' : undefined}
+                >
                   <td className={`${td} font-mono text-xs`}>{p.code}</td>
                   <td className={`${td} font-medium`}>{p.name}</td>
                   <td className={td}>
                     <span className="flex gap-1">
                       {p.isCustomer && <Badge tone="blue">Customer</Badge>}
                       {p.isSupplier && <Badge>Supplier</Badge>}
+                      {p.status === 'ARCHIVED' && <Badge tone="neutral">Archived</Badge>}
                     </span>
                   </td>
                   <td className={`${td} font-mono text-xs`}>
@@ -120,6 +157,9 @@ export function CustomersPage() {
         )}
       </Panel>
       <PartyFormDialog open={creating} onClose={() => setCreating(false)} />
+      {editing && (
+        <PartyFormDialog key={editing.id} open party={editing} onClose={() => setEditing(null)} />
+      )}
     </>
   );
 }

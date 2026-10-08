@@ -12,12 +12,7 @@ import { z } from 'zod';
 import type { DbExecutor } from '../../db/database';
 import { businessDate, daysBetween } from '../../platform/clock';
 import { defineQuery } from '../../platform/queries';
-import {
-  creditedAmountSql,
-  outstandingOf,
-  outstandingSql,
-  paidAmountSql,
-} from '../sales/settlement';
+import { creditedAmountSql, outstandingOf, outstandingSql, paidAmountSql } from '../sales';
 import { allocatedSql, loadReceiptDto, selectReceipts, toReceiptListItem } from './receipt-dto';
 
 export const listReceipts = defineQuery({
@@ -26,6 +21,7 @@ export const listReceipts = defineQuery({
   input: ListReceiptsQuery,
   permission: PERMISSIONS.receivablesRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
   handler: async ({ db, companyId }, input): Promise<ReceiptListItemDto[]> => {
     let q = selectReceipts(db, companyId);
     if (input.customerId) q = q.where('r.customerId', '=', input.customerId);
@@ -56,6 +52,7 @@ export const getReceipt = defineQuery({
   input: z.object({ receiptId: Uuid }),
   permission: PERMISSIONS.receivablesRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
   handler: async ({ db, companyId }, input): Promise<ReceiptDto> =>
     loadReceiptDto(db, companyId, input.receiptId),
 });
@@ -95,6 +92,7 @@ export const listOpenInvoices = defineQuery({
   input: OpenInvoicesQuery,
   permission: PERMISSIONS.receivablesRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
   handler: async ({ db, companyId, now }, input): Promise<OpenInvoiceDto[]> =>
     (await openInvoicesOf(db, companyId, input.customerId, businessDate(now))).map(
       ({ customerId: _c, ...dto }) => dto,

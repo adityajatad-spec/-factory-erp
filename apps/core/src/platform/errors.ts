@@ -48,6 +48,31 @@ export class ForbiddenError extends AppError {
   }
 }
 
+/** The user must replace an administrator-set password before doing anything else. */
+export class PasswordChangeRequiredError extends AppError {
+  constructor() {
+    super(
+      ERROR_CODES.passwordChangeRequired,
+      403,
+      'Choose a new password to continue (your administrator set a temporary one)',
+    );
+  }
+}
+
+/** Sign-in backoff after repeated failures for one username. */
+export class TooManyAttemptsError extends AppError {
+  readonly retryAfterSeconds: number;
+  constructor(retryAfterSeconds: number) {
+    const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+    super(
+      ERROR_CODES.tooManyAttempts,
+      429,
+      `Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+    );
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(entity: string) {
     super(ERROR_CODES.notFound, 404, `${entity} not found`);

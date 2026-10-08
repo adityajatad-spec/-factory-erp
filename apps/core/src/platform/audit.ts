@@ -1,5 +1,5 @@
 import type { DbTransaction } from '../db/database';
-import type { AuthenticatedActor, SystemActor } from './actor';
+import type { Actor } from './actor';
 import { uuidv7 } from './ids';
 import { toJsonb } from './json';
 
@@ -16,7 +16,8 @@ export async function writeAudit(
   tx: DbTransaction,
   records: readonly AuditRecord[],
   meta: {
-    actor: AuthenticatedActor | SystemActor;
+    /** Usually signed in; an anonymous actor only for failed sign-ins of a known user. */
+    actor: Actor;
     command: string;
     companyId: string;
     occurredAt: Date;

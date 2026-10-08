@@ -315,14 +315,18 @@ describe('immutability (enforced by PostgreSQL, not just the application)', () =
     ).rejects.toBeInstanceOf(BusinessRuleError);
   });
 
-  it('keeps audit events and the party ledger append-only', async () => {
-    const db = env.services.db;
-    await expect(
-      db.updateTable('audit.events').set({ command: 'tampered' }).execute(),
-    ).rejects.toMatchObject({ code: 'FO001' });
-    await expect(db.deleteFrom('audit.events').execute()).rejects.toMatchObject({ code: 'FO001' });
-    await expect(db.deleteFrom('finance.partyLedgerEntries').execute()).rejects.toMatchObject({
-      code: 'FO001',
-    });
+  it('keeps audit events and the party ledger append-only (runtime: no privilege; owner: trigger)', async () => {
+    for (const [db, code] of [
+      [env.services.db, '42501'],
+      [env.ownerDb, 'FO001'],
+    ] as const) {
+      await expect(
+        db.updateTable('audit.events').set({ command: 'tampered' }).execute(),
+      ).rejects.toMatchObject({ code });
+      await expect(db.deleteFrom('audit.events').execute()).rejects.toMatchObject({ code });
+      await expect(db.deleteFrom('finance.partyLedgerEntries').execute()).rejects.toMatchObject({
+        code,
+      });
+    }
   });
 });

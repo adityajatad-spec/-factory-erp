@@ -17,5 +17,10 @@ const args = [
   ...process.argv.slice(2),
 ];
 
-const result = spawnSync('pnpm', args, { stdio: 'inherit', env: process.env });
+// Introspect as the schema owner, so privileges never hide a table from the generated types.
+const databaseUrl = process.env.DATABASE_OWNER_URL ?? process.env.DATABASE_URL;
+const result = spawnSync('pnpm', args, {
+  stdio: 'inherit',
+  env: { ...process.env, DATABASE_URL: databaseUrl },
+});
 process.exitCode = result.status ?? 1;

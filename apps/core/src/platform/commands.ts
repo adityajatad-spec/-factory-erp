@@ -1,4 +1,4 @@
-import type { Permission } from '@factory-erp/contracts';
+import { omitRestricted, type Permission } from '@factory-erp/contracts';
 import type { z } from 'zod';
 import type { Database, DbTransaction } from '../db/database';
 import type { Logger } from '../logger';
@@ -6,7 +6,12 @@ import type { Actor, AuthenticatedActor } from './actor';
 import { writeAudit, type AuditRecord } from './audit';
 import type { Clock } from './clock';
 import { translateDbError } from './db-errors';
-import { ForbiddenError, UnauthenticatedError, ValidationError } from './errors';
+import {
+  ForbiddenError,
+  PasswordChangeRequiredError,
+  UnauthenticatedError,
+  ValidationError,
+} from './errors';
 import { claimIdempotencyKey, storeIdempotentResponse } from './idempotency';
 import { canonicalJson, sha256Hex } from './json';
 import { enqueueOutbox, type OutboxRecord } from './outbox';
@@ -43,8 +48,15 @@ export interface CommandDefinition<S extends z.ZodType, R> {
   input: S;
   permission: Permission;
   ai: { tier: CommandAiTier };
-  handler: (ctx: CommandContext, input: z.output<S>) => Promise<CommandOutcome<R>>;
+  /** Sample inputs: future tool descriptions and evaluation cases (validated by a test). */
+  examples?: readonly { description: string; input: NoInfer<z.input<S>> }[];
+  /** Runs even while the user must change their password (only the password change does). */
+  allowDuringPasswordChange?: true;
+  handler(ctx: CommandContext, input: z.output<S>): Promise<CommandOutcome<R>>;
 }
+
+/** Any command, for registries (src/registry.ts); executing one still goes through the bus. */
+export type AnyCommand = CommandDefinition<z.ZodType, unknown>;
 
 export function defineCommand<S extends z.ZodType, R>(
   def: CommandDefinition<S, R>,
@@ -86,6 +98,9 @@ export class CommandBus {
     const input = parsed.data;
 
     const authed = requireAuthenticated(actor);
+    if (authed.user.mustChangePassword && !command.allowDuringPasswordChange) {
+      throw new PasswordChangeRequiredError();
+    }
     if (!authed.user.permissions.has(command.permission))
       throw new ForbiddenError(command.permission);
     if (authed.actorKind === 'ai_agent' && command.ai.tier !== 'DRAFT') {
@@ -96,7 +111,12 @@ export class CommandBus {
     const userId = authed.user.id;
     const companyId = authed.user.companyId;
     const key = opts.idempotencyKey;
-    const requestHash = key ? sha256Hex(canonicalJson({ command: command.name, input })) : '';
+    // RESTRICTED fields (passwords) never enter the stored request hash.
+    const requestHash = key
+      ? sha256Hex(
+          canonicalJson({ command: command.name, input: omitRestricted(command.input, input) }),
+        )
+      : '';
 
     let outcome: { replayed: boolean; result: R };
     try {
@@ -118,7 +138,7 @@ export class CommandBus {
           companyId,
           occurredAt: now,
         });
-        if (done.outbox?.length) await enqueueOutbox(tx, done.outbox, now);
+        if (done.outbox?.length) await enqueueOutbox(tx, done.outbox, now, companyId);
         if (key) await storeIdempotentResponse(tx, { userId, key, response: done.result });
         return { replayed: false, result: done.result };
       });

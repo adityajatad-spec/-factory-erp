@@ -6,8 +6,7 @@ import {
 } from '@factory-erp/gst';
 import type { DbTransaction } from '../../db/database';
 import { BusinessRuleError, ValidationError } from '../../platform/errors';
-import { findEffectiveGstRates } from '../catalog/gst-rates';
-import { SALEABLE_TYPES } from '../catalog/item-dto';
+import { findEffectiveGstRates, SALEABLE_TYPES } from '../catalog';
 
 export interface DraftLine {
   itemId: string;

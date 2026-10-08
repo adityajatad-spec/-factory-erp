@@ -1,5 +1,5 @@
 import { loadConfig } from '../config';
-import { migrate } from '../db/migrate';
+import { prepareDatabase } from '../db/prepare';
 import { resetDatabase } from '../db/reset';
 import { createLogger } from '../logger';
 import { createServices } from '../services';
@@ -14,13 +14,18 @@ const logger = createLogger(config.logLevel, config.env === 'development');
 const reset = process.argv.includes('--reset');
 const password = process.env.DEMO_PASSWORD ?? 'factory-demo';
 
+const ownerUrl = config.databaseOwnerUrl;
+if (!ownerUrl) {
+  logger.fatal('pnpm db:seed needs DATABASE_OWNER_URL (it migrates the schema before seeding)');
+  process.exit(1);
+}
 const services = createServices(config, logger);
 try {
   if (reset) {
-    await resetDatabase(config.databaseUrl, config.env);
+    await resetDatabase(ownerUrl, config.env);
     logger.warn('database reset');
   }
-  await migrate(config.databaseUrl, { logger });
+  await prepareDatabase({ ownerUrl, runtimeUrl: config.databaseUrl, logger });
   const result = await seedDemo(services, { password });
   if (result.seeded) {
     const pdfs = await services.outbox.runOnce(50);

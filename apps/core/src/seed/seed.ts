@@ -7,15 +7,17 @@ import { addDays, businessDate } from '../platform/clock';
 import { uuidv7 } from '../platform/ids';
 import { toJsonb } from '../platform/json';
 import { DEFAULT_ROLES } from '../platform/roles';
-import { createItem } from '../modules/catalog/commands';
-import { hashPassword } from '../modules/identity/password';
-import { loadAccess } from '../modules/identity/sessions';
-import { createParty } from '../modules/parties/commands';
-import { cancelInvoice } from '../modules/sales/cancel-command';
-import { createCreditNoteDraft, issueCreditNote } from '../modules/sales/credit-notes/commands';
-import { createInvoiceDraft } from '../modules/sales/draft-commands';
-import { issueInvoice } from '../modules/sales/issue-command';
-import { recordReceipt } from '../modules/receivables/commands';
+import { createItem } from '../modules/catalog';
+import { hashPassword, loadAccess } from '../modules/identity';
+import { createParty } from '../modules/parties';
+import {
+  cancelInvoice,
+  createCreditNoteDraft,
+  createInvoiceDraft,
+  issueCreditNote,
+  issueInvoice,
+} from '../modules/sales';
+import { recordReceipt } from '../modules/receivables';
 import type { Services } from '../services';
 import {
   DEMO_CANCELLATIONS,
@@ -158,9 +160,10 @@ export async function seedDemo(
       username: 'owner',
       displayName: 'Demo Owner',
       companyId,
-      sessionId: 'seed',
+      sessionId: uuidv7(),
       roles: access.roles,
       permissions: access.permissions,
+      mustChangePassword: false,
     },
   };
 

@@ -6,6 +6,7 @@ import {
   IconCreditNote,
   IconDashboard,
   IconInvoice,
+  IconKey,
   IconUsers,
   IconWallet,
 } from '../icons';
@@ -18,7 +19,9 @@ export interface NavItem {
     | '/sales/customers'
     | '/finance/receipts'
     | '/finance/receivables'
-    | '/inventory/items';
+    | '/inventory/items'
+    | '/admin/users'
+    | '/admin/jobs';
   label: string;
   icon: ComponentType;
   permission: Permission;
@@ -83,6 +86,23 @@ export const NAV: ReadonlyArray<{ section: string | null; items: readonly NavIte
         label: 'Items & stock',
         icon: IconBox,
         permission: PERMISSIONS.itemRead,
+      },
+    ],
+  },
+  {
+    section: 'Administration',
+    items: [
+      {
+        to: '/admin/users',
+        label: 'Users & roles',
+        icon: IconKey,
+        permission: PERMISSIONS.userManage,
+      },
+      {
+        to: '/admin/jobs',
+        label: 'Background jobs',
+        icon: IconChart,
+        permission: PERMISSIONS.outboxManage,
       },
     ],
   },

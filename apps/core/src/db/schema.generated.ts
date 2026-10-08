@@ -156,6 +156,16 @@ export interface FinanceReceipts {
   reference: string | null;
 }
 
+export interface IdentityLoginAttempts {
+  attemptedAt: Timestamp;
+  id: string;
+  ip: string | null;
+  outcome: string;
+  userAgent: string | null;
+  userId: string | null;
+  username: string;
+}
+
 export interface IdentityRolePermissions {
   permission: string;
   roleCode: string;
@@ -190,10 +200,13 @@ export interface IdentityUsers {
   createdAt: Generated<Timestamp>;
   displayName: string;
   id: string;
+  mustChangePassword: Generated<boolean>;
+  passwordChangedAt: Timestamp | null;
   passwordHash: string;
   status: Generated<string>;
   updatedAt: Generated<Timestamp>;
   username: string;
+  version: Generated<number>;
 }
 
 export interface InventoryStockMovements {
@@ -434,6 +447,8 @@ export interface SystemOutboxEvents {
   aggregateType: string;
   attempts: Generated<number>;
   availableAt: Generated<Timestamp>;
+  companyId: string | null;
+  failedAt: Timestamp | null;
   id: string;
   lastError: string | null;
   occurredAt: Generated<Timestamp>;
@@ -455,6 +470,7 @@ export interface DB {
   "finance.receiptAllocations": FinanceReceiptAllocations;
   "finance.receiptBalances": FinanceReceiptBalances;
   "finance.receipts": FinanceReceipts;
+  "identity.loginAttempts": IdentityLoginAttempts;
   "identity.rolePermissions": IdentityRolePermissions;
   "identity.roles": IdentityRoles;
   "identity.sessions": IdentitySessions;

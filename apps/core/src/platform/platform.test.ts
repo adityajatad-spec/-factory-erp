@@ -64,4 +64,12 @@ describe('loadConfig', () => {
       loadConfig({ ...base, NODE_ENV: 'production', COOKIE_SECURE: 'true' }).cookieSecure,
     ).toBe(true);
   });
+
+  it('never gives the production server the schema-owner credentials', () => {
+    const owner = { DATABASE_OWNER_URL: 'postgres://owner:p@localhost:5432/db' };
+    expect(() =>
+      loadConfig({ ...base, ...owner, NODE_ENV: 'production', COOKIE_SECURE: 'true' }),
+    ).toThrow(/DATABASE_OWNER_URL/);
+    expect(loadConfig({ ...base, ...owner }).databaseOwnerUrl).toBe(owner.DATABASE_OWNER_URL);
+  });
 });

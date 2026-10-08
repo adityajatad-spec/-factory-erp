@@ -7,8 +7,10 @@ export const PERMISSIONS = {
   companyRead: 'company.read',
   partyRead: 'party.read',
   partyCreate: 'party.create',
+  partyUpdate: 'party.update',
   itemRead: 'item.read',
   itemCreate: 'item.create',
+  itemUpdate: 'item.update',
   salesInvoiceRead: 'sales.invoice.read',
   salesInvoiceDraft: 'sales.invoice.draft',
   salesInvoiceIssue: 'sales.invoice.issue',
@@ -18,8 +20,13 @@ export const PERMISSIONS = {
   inventoryStockRead: 'inventory.stock.read',
   receivablesRead: 'finance.receivables.read',
   receiptRecord: 'finance.receipt.record',
-  documentRead: 'document.read',
   auditRead: 'audit.read',
+  /** Every signed-in user: their own account (change password). */
+  accountSelf: 'account.self',
+  /** Create users, assign roles, deactivate, reset passwords. */
+  userManage: 'identity.user.manage',
+  /** See failed background jobs (PDFs …) and retry them. */
+  outboxManage: 'system.outbox.manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

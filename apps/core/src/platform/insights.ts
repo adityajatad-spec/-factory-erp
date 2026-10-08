@@ -1,5 +1,5 @@
 import type { KpiDto, Permission } from '@factory-erp/contracts';
-import type { Database } from '../../db/database';
+import type { Database } from '../db/database';
 
 /**
  * The insights contract (docs/ARCHITECTURE.md §E.5). Business modules register KPIs backed

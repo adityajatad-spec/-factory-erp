@@ -10,12 +10,15 @@ export const listParties = defineQuery({
   input: ListPartiesQuery,
   permission: PERMISSIONS.partyRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
+  examples: [
+    { description: 'Find a customer by name', input: { q: 'Sharma', role: 'customer' } },
+    { description: 'Archived suppliers', input: { role: 'supplier', status: 'archived' } },
+  ],
   handler: async ({ db, companyId, can }, input): Promise<PartyDto[]> => {
-    let q = selectParties(db, companyId, can(PERMISSIONS.receivablesRead)).where(
-      'p.status',
-      '=',
-      'ACTIVE',
-    );
+    let q = selectParties(db, companyId, can(PERMISSIONS.receivablesRead));
+    if (input.status === 'active') q = q.where('p.status', '=', 'ACTIVE');
+    if (input.status === 'archived') q = q.where('p.status', '=', 'ARCHIVED');
     if (input.role === 'customer') q = q.where('p.isCustomer', '=', true);
     if (input.role === 'supplier') q = q.where('p.isSupplier', '=', true);
     if (input.q) {
@@ -39,6 +42,7 @@ export const getParty = defineQuery({
   input: z.object({ partyId: Uuid }),
   permission: PERMISSIONS.partyRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
   handler: async ({ db, companyId, can }, input): Promise<PartyDto> => {
     const row = await selectParties(db, companyId, can(PERMISSIONS.receivablesRead))
       .where('p.id', '=', input.partyId)

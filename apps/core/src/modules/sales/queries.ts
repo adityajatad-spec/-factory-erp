@@ -17,6 +17,11 @@ export const listInvoices = defineQuery({
   input: ListInvoicesQuery,
   permission: PERMISSIONS.salesInvoiceRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
+  examples: [
+    { description: 'Unpaid invoices', input: { paymentStatus: 'UNPAID' } },
+    { description: 'Invoices mentioning Sharma', input: { q: 'Sharma', limit: 20 } },
+  ],
   handler: async ({ db, companyId }, input): Promise<InvoiceListItemDto[]> => {
     let q = selectInvoiceList(db, companyId);
     if (input.status) q = q.where('inv.status', '=', input.status);
@@ -43,6 +48,7 @@ export const getInvoice = defineQuery({
   input: z.object({ invoiceId: Uuid }),
   permission: PERMISSIONS.salesInvoiceRead,
   ai: { tier: 'READ' },
+  dataClass: 'CONFIDENTIAL',
   handler: async ({ db, companyId }, input): Promise<InvoiceDto> =>
     loadInvoiceDto(db, companyId, input.invoiceId),
 });

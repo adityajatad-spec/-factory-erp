@@ -12,6 +12,8 @@ const EnvSchema = z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
     DATABASE_URL: PostgresUrl,
+    /** Schema owner. Development only: lets the server migrate at startup. */
+    DATABASE_OWNER_URL: PostgresUrl.optional(),
     DATA_DIR: z.string().min(1).default('./.data'),
     COOKIE_SECURE: z
       .enum(['true', 'false'])
@@ -21,8 +23,18 @@ const EnvSchema = z
     PDF_BROWSER_EXECUTABLE: z.string().min(1).optional(),
     WEB_DIST_DIR: z.string().min(1).optional(),
     OUTBOX_POLL_MS: z.coerce.number().int().min(100).max(60_000).default(1000),
+    /** Sign-in requests per minute from one IP (per-username backoff applies on top). */
+    LOGIN_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(10),
   })
   .superRefine((env, ctx) => {
+    if (env.NODE_ENV === 'production' && env.DATABASE_OWNER_URL) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DATABASE_OWNER_URL'],
+        message:
+          'must not be set for the server in production (run `pnpm db:migrate` as a separate step; the server holds only runtime credentials)',
+      });
+    }
     if (env.NODE_ENV === 'production' && !env.COOKIE_SECURE) {
       ctx.addIssue({
         code: 'custom',
@@ -38,12 +50,14 @@ export interface Config {
   port: number;
   logLevel: string;
   databaseUrl: string;
+  databaseOwnerUrl: string | undefined;
   dataDir: string;
   cookieSecure: boolean;
   sessionTtlHours: number;
   pdfBrowserExecutable: string | undefined;
   webDistDir: string | undefined;
   outboxPollMs: number;
+  loginRateLimitPerMinute: number;
 }
 
 export class ConfigError extends Error {
@@ -67,11 +81,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: e.PORT,
     logLevel: e.LOG_LEVEL,
     databaseUrl: e.DATABASE_URL,
+    databaseOwnerUrl: e.DATABASE_OWNER_URL,
     dataDir: path.resolve(e.DATA_DIR),
     cookieSecure: e.COOKIE_SECURE,
     sessionTtlHours: e.SESSION_TTL_HOURS,
     pdfBrowserExecutable: e.PDF_BROWSER_EXECUTABLE,
     webDistDir: e.WEB_DIST_DIR ? path.resolve(e.WEB_DIST_DIR) : undefined,
     outboxPollMs: e.OUTBOX_POLL_MS,
+    loginRateLimitPerMinute: e.LOGIN_RATE_LIMIT_PER_MINUTE,
   };
 }

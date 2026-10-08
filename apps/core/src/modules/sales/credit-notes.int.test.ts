@@ -438,9 +438,10 @@ describe('cross-company isolation', () => {
         username: 'otherowner',
         displayName: 'Other',
         companyId,
-        sessionId: 'test',
+        sessionId: uuidv7(),
         roles: access.roles,
         permissions: access.permissions,
+        mustChangePassword: false,
       },
     };
     const customer = await cmd().execute(
@@ -639,9 +640,9 @@ describe('database defence in depth', () => {
         sql`update sales.credit_note_lines set quantity = 0.5 where credit_note_id = ${cn.id}`,
       ),
     ).rejects.toMatchObject({ code: 'FO002' });
-    await expect(
-      attempt(sql`delete from finance.party_ledger_entries where source_id = ${cn.id}`),
-    ).rejects.toMatchObject({ code: 'FO001' });
+    const deleteLedger = sql`delete from finance.party_ledger_entries where source_id = ${cn.id}`;
+    await expect(attempt(deleteLedger)).rejects.toMatchObject({ code: '42501' });
+    await expect(deleteLedger.execute(env.ownerDb)).rejects.toMatchObject({ code: 'FO001' });
   });
 });
 

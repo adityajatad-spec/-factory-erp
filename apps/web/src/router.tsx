@@ -8,6 +8,9 @@ import {
 } from '@tanstack/react-router';
 import { AppShell } from './components/layout/app-shell';
 import { Spinner } from './components/display';
+import { ChangePasswordPage } from './features/account/change-password-page';
+import { BackgroundJobsPage } from './features/admin/background-jobs-page';
+import { UsersPage } from './features/admin/users-page';
 import { LoginPage } from './features/auth/login-page';
 import { CreditNoteDetailPage } from './features/credit-notes/credit-note-detail-page';
 import { CreditNoteEditorPage } from './features/credit-notes/credit-note-editor-page';
@@ -183,6 +186,22 @@ const receivablesRoute = createRoute({
   component: ReceivablesPage,
 });
 
+const usersRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/admin/users',
+  component: UsersPage,
+});
+const jobsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/admin/jobs',
+  component: BackgroundJobsPage,
+});
+const passwordRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/account/password',
+  component: () => <ChangePasswordPage />,
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
@@ -201,6 +220,9 @@ const routeTree = rootRoute.addChildren([
     receiptNewRoute,
     receiptDetailRoute,
     receivablesRoute,
+    usersRoute,
+    jobsRoute,
+    passwordRoute,
   ]),
 ]);
 
