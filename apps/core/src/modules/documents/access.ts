@@ -37,6 +37,17 @@ export const DOCUMENT_ACCESS: Readonly<Record<DocumentKind, DocumentAccessRule>>
         .where('pdfDocumentId', '=', documentId)
         .executeTakeFirst()),
   },
+  // A purchase order PDF is read by whoever may read purchase orders.
+  PURCHASE_ORDER_PDF: {
+    permission: PERMISSIONS.purchaseOrderRead,
+    attached: async (db, companyId, documentId) =>
+      !!(await db
+        .selectFrom('purchase.orders')
+        .select('id')
+        .where('companyId', '=', companyId)
+        .where('pdfDocumentId', '=', documentId)
+        .executeTakeFirst()),
+  },
 };
 
 /** Kinds the database allows that deliberately have no readers yet, and why. */

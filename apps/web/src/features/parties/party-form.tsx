@@ -61,15 +61,19 @@ export function PartyFormDialog({
   open,
   onClose,
   party = null,
+  asSupplier = false,
 }: {
   open: boolean;
   onClose: () => void;
   party?: PartyDto | null;
+  /** New parties start as suppliers (from the purchasing screens). */
+  asSupplier?: boolean;
 }) {
+  const blank: Form = asSupplier ? { ...EMPTY, isCustomer: false, isSupplier: true } : EMPTY;
   const queryClient = useQueryClient();
   const can = useCan();
   const editing = party !== null;
-  const [form, setForm] = useState<Form>(() => (party ? formOf(party) : EMPTY));
+  const [form, setForm] = useState<Form>(() => (party ? formOf(party) : blank));
   const states = useQuery({
     queryKey: ['states'],
     queryFn: () => api.get<StateDto[]>('/reference/states'),
@@ -80,7 +84,7 @@ export function PartyFormDialog({
 
   const done = async () => {
     await queryClient.invalidateQueries({ queryKey: ['parties'] });
-    if (!editing) setForm(EMPTY);
+    if (!editing) setForm(blank);
     onClose();
   };
   const save = useMutation({

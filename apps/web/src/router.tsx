@@ -25,6 +25,22 @@ import { ReceiptDetailPage } from './features/receivables/receipt-detail-page';
 import { ReceiptsPage } from './features/receivables/receipts-page';
 import { ReceivablesPage } from './features/receivables/receivables-page';
 import { RecordReceiptPage } from './features/receivables/record-receipt-page';
+import { StockPage } from './features/inventory/stock-page';
+import { PayablesPage } from './features/payables/payables-page';
+import { SupplierPaymentDetailPage } from './features/payables/supplier-payment-detail-page';
+import { SupplierPaymentNewPage } from './features/payables/supplier-payment-new-page';
+import { SupplierPaymentsPage } from './features/payables/supplier-payments-page';
+import { BillDetailPage } from './features/purchasing/bill-detail-page';
+import { BillEditorPage } from './features/purchasing/bill-editor-page';
+import { BillsPage } from './features/purchasing/bills-page';
+import { GoodsReceiptDetailPage } from './features/purchasing/goods-receipt-detail-page';
+import { GoodsReceiptEditorPage } from './features/purchasing/goods-receipt-editor-page';
+import { GoodsReceiptsPage } from './features/purchasing/goods-receipts-page';
+import { PurchaseOrderDetailPage } from './features/purchasing/purchase-order-detail-page';
+import { PurchaseOrderEditorPage } from './features/purchasing/purchase-order-editor-page';
+import { PurchaseOrdersPage } from './features/purchasing/purchase-orders-page';
+import { SupplierDetailPage } from './features/purchasing/supplier-detail-page';
+import { SuppliersPage } from './features/purchasing/suppliers-page';
 import { ApiError } from './lib/api';
 import { sessionQuery } from './lib/session';
 
@@ -186,6 +202,125 @@ const receivablesRoute = createRoute({
   component: ReceivablesPage,
 });
 
+const uuidParam = (s: Record<string, unknown>, key: string): Record<string, string> =>
+  typeof s[key] === 'string' && UUID.test(s[key]) ? { [key]: s[key] } : {};
+
+// Purchasing
+const suppliersRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/suppliers',
+  component: SuppliersPage,
+});
+const supplierDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/suppliers/$partyId',
+  component: SupplierDetailPage,
+});
+const PO_VIEWS = [
+  'open',
+  'overdue',
+  'DRAFT',
+  'APPROVED',
+  'PARTIALLY_RECEIVED',
+  'RECEIVED',
+  'CLOSED',
+  'CANCELLED',
+] as const;
+const purchaseOrdersRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/orders',
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): { q?: string; view?: (typeof PO_VIEWS)[number] } => ({
+    ...searchQ(s),
+    ...(PO_VIEWS.find((v) => v === s.view) ? { view: s.view as (typeof PO_VIEWS)[number] } : {}),
+  }),
+  component: PurchaseOrdersPage,
+});
+const purchaseOrderNewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/orders/new',
+  component: PurchaseOrderEditorPage,
+});
+const purchaseOrderDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/orders/$orderId',
+  component: PurchaseOrderDetailPage,
+});
+const purchaseOrderEditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/orders/$orderId/edit',
+  component: PurchaseOrderEditorPage,
+});
+const goodsReceiptsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/receipts',
+  component: GoodsReceiptsPage,
+});
+const goodsReceiptNewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/receipts/new',
+  validateSearch: (s: Record<string, unknown>): { orderId?: string } => uuidParam(s, 'orderId'),
+  component: GoodsReceiptEditorPage,
+});
+const goodsReceiptDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/receipts/$grnId',
+  component: GoodsReceiptDetailPage,
+});
+const billsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/bills',
+  component: BillsPage,
+});
+const billNewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/bills/new',
+  validateSearch: (s: Record<string, unknown>): { orderId?: string } => uuidParam(s, 'orderId'),
+  component: BillEditorPage,
+});
+const billDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/bills/$invoiceId',
+  component: BillDetailPage,
+});
+const billEditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/purchasing/bills/$invoiceId/edit',
+  component: BillEditorPage,
+});
+
+// Payables
+const payablesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/payables',
+  component: PayablesPage,
+});
+const supplierPaymentsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/supplier-payments',
+  component: SupplierPaymentsPage,
+});
+const supplierPaymentNewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/supplier-payments/new',
+  validateSearch: (s: Record<string, unknown>): { supplierId?: string; invoiceId?: string } => ({
+    ...uuidParam(s, 'supplierId'),
+    ...uuidParam(s, 'invoiceId'),
+  }),
+  component: SupplierPaymentNewPage,
+});
+const supplierPaymentDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/supplier-payments/$paymentId',
+  component: SupplierPaymentDetailPage,
+});
+const stockRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/inventory/stock',
+  component: StockPage,
+});
+
 const usersRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/admin/users',
@@ -220,6 +355,24 @@ const routeTree = rootRoute.addChildren([
     receiptNewRoute,
     receiptDetailRoute,
     receivablesRoute,
+    suppliersRoute,
+    supplierDetailRoute,
+    purchaseOrdersRoute,
+    purchaseOrderNewRoute,
+    purchaseOrderDetailRoute,
+    purchaseOrderEditRoute,
+    goodsReceiptsRoute,
+    goodsReceiptNewRoute,
+    goodsReceiptDetailRoute,
+    billsRoute,
+    billNewRoute,
+    billDetailRoute,
+    billEditRoute,
+    payablesRoute,
+    supplierPaymentsRoute,
+    supplierPaymentNewRoute,
+    supplierPaymentDetailRoute,
+    stockRoute,
     usersRoute,
     jobsRoute,
     passwordRoute,

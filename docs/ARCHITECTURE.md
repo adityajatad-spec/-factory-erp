@@ -15,6 +15,7 @@
 | v0.3 | 2026-10-05 | **Building started.** Discovery deferred (surprise prototype). Phase 0 foundation and the first vertical slice are implemented: auth/RBAC → parties → items → invoice draft → GST → issue → PDF → audit → dashboard. See the README. |
 | v0.4 | 2026-10-07 | Renamed **Factory ERP**. Sales-to-cash receivables loop and the **sales correction path** (invoice cancellation, credit notes) implemented — see `docs/adr/0002-sales-correction-path.md`. G.2 updated: invoice cancellation is CONFIRM. |
 | v0.5 | 2026-10-07 | **Slice 0 — hardening** (see `docs/ROADMAP.md` §11). Least-privilege runtime database role (P), backup and restore with a restore drill, module rules now enforced by a test (E.3), multi-company isolation harness, master-data editing and user administration, document access derived from the owning record, outbox failure handling, one read-only snapshot per query, and the AI seams (`dataClass` on queries, RESTRICTED fields, `packages/ai` with the pure routing policy, G.1). Jobs use the transactional outbox, not pg-boss (ADR 0001). |
+| v0.6 | 2026-10-09 | **Slice 1 — procure-to-pay and the inventory write path** (see `docs/ROADMAP.md`). Inventory owns an append-only stock ledger written only through its API; purchase orders with separate approval; GRNs with accepted/rejected quantities; purchase invoices with a deterministic three-way match and company-configurable tolerances; an append-only supplier payable ledger; supplier payments and supplier bank details under maker-checker (requester ≠ approver, enforced in commands and SQL); PO PDFs through the outbox. No new architecture: the same buses, owners, outbox and documents. R-25 added. |
 
 **How to read this document:**
 - Sections A–S are the base proposal, already edited for Round 2.
@@ -416,7 +417,8 @@ Build versus integrate for later chat is still open. Embedding a self-hostable o
   - `GET /sales-invoices?status=ISSUED&party=…&cursor=…`
   - `POST /sales-invoices` creates a draft. `PATCH /sales-invoices/{id}` works on drafts only.
   - `POST /sales-invoices/{id}/issue` · `POST /sales-invoices/{id}/cancel` · `POST /sales-invoices/{id}/credit-notes` (draft) · `POST /credit-notes/{id}/issue` (implemented, ADR 0002)
-  - `POST /purchase-orders/{id}/submit` · `/approve` · `/reject`
+  - `POST /purchase-orders/{id}/approve` · `/cancel` · `/close` (implemented, Slice 1 — a draft is approved or cancelled; there is no separate submit/reject step yet) · `POST /goods-receipts` · `POST /purchase-invoices/{id}/post`
+  - `POST /supplier-payments` (request) · `/{id}/approve` · `/{id}/reject` · `/{id}/allocations` · `POST /parties/{id}/bank-accounts` (propose) · `POST /bank-accounts/{id}/approve` · `/reject` (implemented, Slice 1)
   - `POST /documents` (upload) · `POST /documents/{id}/extract` · `POST /extractions/{id}/approve`
 - **Idempotency:** every non-GET request requires an `Idempotency-Key` header. It protects against offline replays, AI retries and double clicks. Keys are stored with their response for 7 days.
 - **Optimistic concurrency:** updates and transitions require `If-Match: <version>`, and a conflict returns `409`.
@@ -448,8 +450,8 @@ user ─▶ Agent runtime (in core) ─▶ LLM gateway ─▶ local runtime (Oll
 |---|---|---|
 | READ | Runs immediately, limited by the user's permissions and scopes | today's production, outstanding payments, stock-out forecast |
 | DRAFT | Runs, but only creates drafts or proposals. Nothing takes effect until a human acts. | prepare a PO, prepare an invoice, propose an allocation, draft a message |
-| CONFIRM | The model **cannot execute it**. The UI shows an action card, and a human click calls the real endpoint. | issue an invoice, issue a credit note, cancel an invoice (owner decision 2026-10-07, ADR 0002), approve a PO, record a payment, send a department message, create a maintenance ticket (one tap) |
-| FORBIDDEN | Not exposed to AI at all | deleting or reversing posted ledger entries, changing roles or permissions, editing salaries or bank details, period close, settings |
+| CONFIRM | The model **cannot execute it**. The UI shows an action card, and a human click calls the real endpoint. | issue an invoice, issue a credit note, cancel an invoice (owner decision 2026-10-07, ADR 0002), approve a PO, record goods received, post a supplier bill, record or approve a supplier payment, send a department message, create a maintenance ticket (one tap) |
+| FORBIDDEN | Not exposed to AI at all | deleting or reversing posted ledger entries, changing roles or permissions, editing salaries, reading or changing supplier bank details (RESTRICTED, Slice 1), period close, settings |
 
 The OWNER can tighten tiers. Loosening is limited to exceptions defined in code.
 
@@ -1160,6 +1162,7 @@ The architecture depends on **capabilities and protocols, not versions**:
 | R-22 | Commercial messaging | SMS registration and template rules, and WhatsApp business messaging rules | Notifications | TRAI. Provider documentation. |
 | R-23 | Exports | LUT, export invoice particulars and currency, if applicable | Export invoices | CBIC. DGFT. |
 | R-24 | Electronic signing | Requirements for digitally signed invoice PDFs, if used | PDF rendering | CGST Rules. IT Act. |
+| R-25 | Bank identifiers | IFSC structure and the account-number formats banks use (only the shape is checked today) | Supplier bank details | RBI. The banks themselves. |
 
 **Where to look:**
 - cbic-gst.gov.in for GST Acts, Rules and notifications

@@ -2,6 +2,7 @@ import type { Config } from './config';
 import { createDatabase, type Database } from './db/database';
 import type { Logger } from './logger';
 import { AuthService } from './modules/identity';
+import { PURCHASE_ORDER_APPROVED_TOPIC, purchaseOrderPdfHandler } from './modules/purchasing';
 import {
   CREDIT_NOTE_ISSUED_TOPIC,
   creditNotePdfHandler,
@@ -48,6 +49,10 @@ export function createServices(
     handlers: {
       [INVOICE_ISSUED_TOPIC]: invoicePdfHandler({ blobStore, renderer: pdfRenderer }),
       [CREDIT_NOTE_ISSUED_TOPIC]: creditNotePdfHandler({ blobStore, renderer: pdfRenderer }),
+      [PURCHASE_ORDER_APPROVED_TOPIC]: purchaseOrderPdfHandler({
+        blobStore,
+        renderer: pdfRenderer,
+      }),
     },
   });
 

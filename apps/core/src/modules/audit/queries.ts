@@ -20,7 +20,55 @@ function summarise(command: string, entityType: string, after: unknown): string 
   if (entityType === 'sales.invoice' && command === 'sales.creditNote.issue') {
     return `Credit note ${str(a.creditNoteNumber)} for ${rupees(a.creditedAmount)} issued (outstanding now ${rupees(a.outstandingAmount)})`;
   }
+  if (
+    entityType === 'purchase.invoice' &&
+    (command === 'finance.supplierPayment.approve' ||
+      command === 'finance.supplierPayment.allocate')
+  ) {
+    return `Payment ${rupees(a.allocatedAmount)} applied from ${str(a.paymentNumber)} (outstanding now ${rupees(a.outstandingAmount)})`;
+  }
+  if (entityType === 'purchase.order' && command === 'purchase.grn.record') {
+    return `Goods received — order is now ${str(a.status)}`;
+  }
   switch (command) {
+    case 'purchase.order.createDraft':
+      return `Purchase order draft created (total ${rupees(a.grandTotal)})`;
+    case 'purchase.order.updateDraft':
+      return `Purchase order draft updated (total ${rupees(a.grandTotal)})`;
+    case 'purchase.order.approve':
+      return `Approved as ${str(a.poNumber)} (total ${rupees(a.grandTotal)})`;
+    case 'purchase.order.cancel':
+      return `Cancelled — ${str(a.reason)}`;
+    case 'purchase.order.close':
+      return `Short-closed — ${str(a.reason)}`;
+    case 'documents.purchaseOrderPdf.generate':
+      return 'Purchase order PDF generated';
+    case 'purchase.grn.record':
+      return `Goods receipt ${str(a.grnNumber)} recorded`;
+    case 'purchase.invoice.createDraft':
+      return `Supplier bill ${str(a.supplierInvoiceNumber)} entered as a draft (total ${rupees(a.grandTotal)})`;
+    case 'purchase.invoice.updateDraft':
+      return `Supplier bill draft updated (total ${rupees(a.grandTotal)})`;
+    case 'purchase.invoice.post':
+      return `Posted as ${str(a.invoiceNumber)} (total ${rupees(a.grandTotal)}; match ${str(a.matchStatus)})${
+        str(a.matchOverrideReason) ? ` — accepted: ${str(a.matchOverrideReason)}` : ''
+      }`;
+    case 'finance.supplierPayment.request':
+      return `Supplier payment of ${rupees(a.amount)} recorded, awaiting approval`;
+    case 'finance.supplierPayment.approve':
+      return `Approved as ${str(a.paymentNumber)} (${rupees(a.amount)}; on account ${rupees(a.unallocatedAmount)})`;
+    case 'finance.supplierPayment.reject':
+      return `Rejected — ${str(a.reason)}`;
+    case 'finance.supplierPayment.allocate':
+      return `Allocated to bills (on account now ${rupees(a.unallocatedAmount)})`;
+    case 'parties.bankAccount.propose':
+      return `Bank details proposed (${str(a.ifsc)}, account ${str(a.accountNumberMasked)}), awaiting approval`;
+    case 'parties.bankAccount.approve':
+      return a.status === 'SUPERSEDED'
+        ? 'Bank details superseded by newly approved ones'
+        : `Bank details approved (${str(a.ifsc)}, account ${str(a.accountNumberMasked)})`;
+    case 'parties.bankAccount.reject':
+      return `Bank details rejected — ${str(a.reason)}`;
     case 'sales.invoice.cancel':
       return `Cancelled — ${str(a.reason)} (${rupees(a.reversedAmount)} reversed from the customer balance)`;
     case 'sales.creditNote.createDraft':

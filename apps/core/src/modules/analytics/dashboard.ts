@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { businessDate } from '../../platform/clock';
 import { defineQuery } from '../../platform/queries';
 import { financeKpis } from '../finance';
+import { payablesKpis } from '../payables';
+import { purchasingKpis } from '../purchasing';
 import { receivablesKpis } from '../receivables';
 import { salesKpis, selectInvoiceList, toInvoiceListItem } from '../sales';
 import type { KpiDefinition } from '../../platform/insights';
@@ -15,6 +17,11 @@ const DISPLAY_ORDER = [
   'sales.invoices_this_month',
   'sales.fy_to_date',
   'sales.drafts_open',
+  'finance.payables_outstanding',
+  'finance.payables_due_this_week',
+  'finance.payables_overdue',
+  'purchase.open_orders',
+  'purchase.overdue_orders',
 ];
 
 const rank = (id: string) => {
@@ -27,6 +34,8 @@ export const KPI_REGISTRY: readonly KpiDefinition[] = [
   ...salesKpis,
   ...financeKpis,
   ...receivablesKpis,
+  ...payablesKpis,
+  ...purchasingKpis,
 ].sort((a, b) => rank(a.id) - rank(b.id));
 
 export const getDashboard = defineQuery({

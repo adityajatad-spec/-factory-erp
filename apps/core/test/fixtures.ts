@@ -1,4 +1,4 @@
-import type { ItemDto, PartyDto, RoleCode } from '@factory-erp/contracts';
+import type { ItemDto, PartyDto, RoleCode, WarehouseDto } from '@factory-erp/contracts';
 import type { AuthenticatedActor } from '../src/platform/actor';
 import { uuidv7 } from '../src/platform/ids';
 import { toJsonb } from '../src/platform/json';
@@ -6,6 +6,7 @@ import { createItem } from '../src/modules/catalog/commands';
 import { hashPassword } from '../src/modules/identity/password';
 import { loadAccess } from '../src/modules/identity/sessions';
 import { createParty } from '../src/modules/parties/commands';
+import { createWarehouse } from '../src/modules/inventory';
 import { syncRoles } from '../src/seed/seed';
 import type { Services } from '../src/services';
 
@@ -13,9 +14,16 @@ export const TEST_PASSWORD = 'correct horse battery staple';
 
 export interface Fixture {
   companyId: string;
-  actors: Record<'owner' | 'accountant' | 'worker', AuthenticatedActor>;
+  actors: Record<
+    'owner' | 'admin' | 'accountant' | 'worker' | 'purchase' | 'supervisor',
+    AuthenticatedActor
+  >;
   customers: { intra: PartyDto; inter: PartyDto };
   items: { widget: ItemDto; carton: ItemDto; rawMaterial: ItemDto };
+  /** Suppliers in the company's state (CGST + SGST) and in another state (IGST). */
+  suppliers: { local: PartyDto; outstation: PartyDto };
+  /** The store purchases are delivered to. */
+  warehouse: WarehouseDto;
 }
 
 /**
@@ -109,8 +117,12 @@ export async function createFixture(
   };
   const actors = {
     owner: await actor('owner', 'OWNER'),
+    // A second person with full access: the checker for maker-checker flows.
+    admin: await actor('admin', 'ADMIN'),
     accountant: await actor('accountant', 'ACCOUNTANT'),
     worker: await actor('worker', 'WORKER'),
+    purchase: await actor('purchase', 'PURCHASE_MANAGER'),
+    supervisor: await actor('supervisor', 'SUPERVISOR'),
   };
 
   const c = services.commands;
@@ -167,7 +179,36 @@ export async function createFixture(
     actors.owner,
   );
 
-  return { companyId, actors, customers: { intra, inter }, items: { widget, carton, rawMaterial } };
+  const supplier = (code: string, name: string, gstin: string, stateCode: string) =>
+    c.execute(
+      createParty,
+      {
+        code,
+        name: `${name}${tag}`,
+        isCustomer: false,
+        isSupplier: true,
+        gstin,
+        stateCode,
+        creditDays: 30,
+      },
+      actors.owner,
+    );
+  const local = await supplier('S-LOCAL', 'Local Steel Supplier', '27TESTO0004D1Z4', '27');
+  const outstation = await supplier('S-OUT', 'Outstation Packaging', '24TESTO0005E1Z5', '24');
+  const warehouse = await c.execute(
+    createWarehouse,
+    { code: 'STORE', name: `Stores${tag}` },
+    actors.owner,
+  );
+
+  return {
+    companyId,
+    actors,
+    customers: { intra, inter },
+    items: { widget, carton, rawMaterial },
+    suppliers: { local, outstation },
+    warehouse,
+  };
 }
 
 /** An actor identical to `user` but acting through the (future) AI copilot. */

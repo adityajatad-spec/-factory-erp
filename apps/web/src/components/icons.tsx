@@ -77,3 +77,34 @@ export const IconKey = () => (
     <path d="M10.7 12.3 21 2M17 6l3 3M14.5 8.5l2 2" />
   </svg>
 );
+export const IconCart = () => (
+  <svg {...base} aria-hidden="true">
+    <circle cx="9" cy="20" r="1.3" />
+    <circle cx="18" cy="20" r="1.3" />
+    <path d="M2 3h3l2.6 12.2a1.5 1.5 0 0 0 1.5 1.2h8.8a1.5 1.5 0 0 0 1.5-1.1L21 8H6" />
+  </svg>
+);
+export const IconTruck = () => (
+  <svg {...base} aria-hidden="true">
+    <path d="M2 6h12v10H2zM14 10h4l3 3v3h-7z" />
+    <circle cx="6" cy="18" r="1.8" />
+    <circle cx="17" cy="18" r="1.8" />
+  </svg>
+);
+export const IconBill = () => (
+  <svg {...base} aria-hidden="true">
+    <path d="M5 2h14v20l-3-2-2 2-2-2-2 2-2-2-3 2z" />
+    <path d="M9 7h6M9 11h6M9 15h4" />
+  </svg>
+);
+export const IconBank = () => (
+  <svg {...base} aria-hidden="true">
+    <path d="M3 10h18L12 4zM5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18" />
+  </svg>
+);
+export const IconLayers = () => (
+  <svg {...base} aria-hidden="true">
+    <path d="m12 3 9 5-9 5-9-5z" />
+    <path d="m3 13 9 5 9-5" />
+  </svg>
+);

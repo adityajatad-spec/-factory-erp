@@ -3,7 +3,7 @@
  *
  *   1. create a throwaway database (factoryerp_e2e) and seed the deterministic demo data
  *   2. start the built core (serving the built web app) on its own port and data directory
- *   3. run every journey: smoke, receivables, corrections
+ *   3. run every journey: smoke, receivables, corrections, administration, procure-to-pay
  *   4. stop the server, drop the database, delete the data directory
  *
  * Your development database and apps/core/.data are never touched. Requires `pnpm build`,
@@ -27,7 +27,13 @@ const coreDir = path.resolve(webDir, '../core');
 const DB_NAME = 'factoryerp_e2e';
 const PORT = process.env.E2E_PORT ?? '3100';
 const BASE_URL = `http://127.0.0.1:${PORT}`;
-const JOURNEYS = ['smoke.ts', 'receivables.ts', 'corrections.ts', 'administration.ts'];
+const JOURNEYS = [
+  'smoke.ts',
+  'receivables.ts',
+  'corrections.ts',
+  'administration.ts',
+  'procurement.ts',
+];
 
 const adminUrl = process.env.TEST_DATABASE_ADMIN_URL;
 if (!adminUrl) throw new Error('TEST_DATABASE_ADMIN_URL is not set (see .env.example)');

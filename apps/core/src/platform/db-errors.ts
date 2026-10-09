@@ -44,6 +44,10 @@ export function translateDbError(err: unknown): unknown {
       return new BusinessRuleError('ALLOCATION_INVALID', err.message);
     case 'FO004':
       return new BusinessRuleError('CREDIT_NOTE_INVALID', err.message);
+    case 'FO005':
+      return new BusinessRuleError('SUPPLIER_ALLOCATION_INVALID', err.message);
+    case 'FO006':
+      return new BusinessRuleError('GOODS_RECEIPT_INVALID', err.message);
     default:
       return err;
   }

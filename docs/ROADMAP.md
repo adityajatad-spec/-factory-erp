@@ -1,6 +1,6 @@
 # Factory ERP — Current State and Implementation Roadmap
 
-**Status:** approved by the owner · **Slice 0 (hardening) complete on 7 October 2026** (§11) · Slice 1 waits for the owner's go-ahead · baseline commit `1732f0b`
+**Status:** approved by the owner · **Slice 0 (hardening) complete on 7 October 2026** (§11) · **Slice 1 (procure-to-pay) complete on 9 October 2026** (§12) · Slice 2 waits for the owner's go-ahead · baseline commit `1732f0b`
 
 **What this document is.** Written in response to the "full product vision" brief. It does four things:
 
@@ -156,13 +156,13 @@ Paths are relative to `apps/core/src` unless they start with `db/`, `packages/` 
 
 | Feature | Status | Evidence | Gaps | Depends on | Phase |
 |---|---|---|---|---|---|
-| Suppliers | PARTIAL | Parties with the supplier role: created, listed (role filter), edited and archived on the parties screen (Slice 0). | No bank details (need maker-checker), no MSME status [VERIFY R-18], no purchasing documents. | — | 1 |
-| Purchasing and POs | PLANNED | ARCHITECTURE §Q phase 2, §G.4 | — | suppliers, items | 1 |
-| Goods receipts (GRN) | PLANNED | — | — | POs, inventory write path | 1 |
-| Purchase invoices | PLANNED | the target of document AI (§G.6) | Input tax credit, reverse charge [VERIFY R-11], TDS [VERIFY R-17] | GRN, inward GST | 1 |
-| Payables and supplier payments | PLANNED | — | maker-checker | purchase invoices | 1 |
-| Inventory | FOUNDATION ONLY | `inventory.stock_movements` is an append-only ledger with a no-truncate guard; `stock_on_hand` view. Opening stock is **inserted directly by the seed** (`seed/seed.ts:196`). Stock is shown read-only on the items page. | **No stock-movement commands at all.** No valuation or cost, no negative-stock guard, no lots or batches. Sales do not consume stock. | — | 1 |
-| Warehouses | FOUNDATION ONLY | `inventory.warehouses`; one seeded | No screen or commands. No transfers or bins. | inventory | 1 |
+| Suppliers | COMPLETE (V1) | Parties with the supplier role (Slice 0) plus **bank details under maker-checker** (Slice 1): `parties/bank-accounts.ts`, migration 0013, RESTRICTED query, masked command results and audit, log redaction; suppliers screens. | No MSME status [VERIFY R-18]; one address. | — | 1 |
+| Purchasing and POs | COMPLETE (V1) | `modules/purchasing/orders`: draft → approve (separate permission, repriced, gapless `PO/<FY>/<n>`) → part-received → received, short-close and cancel with reasons; SQL freezes approved orders; PDF via the outbox; 13 tests | No amendments, approval thresholds or multi-level approval; no reorder suggestions | suppliers, items | 1 |
+| Goods receipts (GRN) | COMPLETE (V1) | `modules/purchasing/receipts`: accepted + rejected (with reason), no over-receipt (command + deferred SQL FO006), stock only through `inventory.recordStockMovements`; property test over random delivery sequences | Over-receipt is not permitted at all; no quality inspection step; no returns to supplier | POs, inventory write path | 1 |
+| Purchase invoices | COMPLETE (V1) | `modules/purchasing/invoices`: PO-based and direct paths, duplicate-bill check, shared GST engine, pure three-way match with company tolerances and property tests, override permission + reason, posting credits the payable ledger | Input tax credit, reverse charge [VERIFY R-11], TDS [VERIFY R-17], debit notes, attachments of the paper bill | GRN, inward GST | 1 |
+| Payables and supplier payments | COMPLETE (V1) | `modules/payables`, `finance/payables-ledger.ts`: maker-checker payments (command + SQL), full/partial/multi-bill/on-account allocation under row locks, deferred SQL FO005, payables summary (owed, overdue, due this week, paid, on account) and KPIs | Refunds, un-allocation, payment runs, bank file export | purchase invoices | 1 |
+| Inventory | PARTIAL | **Write path owned by the inventory module** (`inventory/movements.ts`): append-only ledger with UOM, source, reference and actor; sign and company checks in SQL; negative-stock guard under advisory locks; compensating adjustments with a reason; opening stock through the same API; stock and movement screens | No valuation or cost, no lots or batches, no transfers. Sales do not consume stock. | — | 1–2 |
+| Warehouses | PARTIAL | `inventory.warehouse.create`; two demo stores | No archive screen, transfers or bins | inventory | 2 |
 
 ### 2.4 Shop floor and workforce
 
@@ -857,4 +857,45 @@ existing test green. Final state: **385 automated tests and 44 browser checks pa
 - Customers have one address; there is no maker-checker yet.
 - Nothing is production tax-ready: GST rates are demo data and PDFs remain SPECIMEN until the CA gate.
 
-### 11.3 Next: Slice 1 — procure-to-pay with a real stock ledger (§4.3), on the owner's go-ahead.
+### 11.3 Next: Slice 1 — procure-to-pay with a real stock ledger (§4.3) — done, see §12.
+
+---
+
+## 12. Slice 1 — procure-to-pay and the inventory write path (9 October 2026)
+
+Supplier → PO → approval → GRN → stock → purchase invoice → three-way match → supplier
+payable → supplier payment (maker-checker) → allocation → outstanding. No architectural change:
+every write goes through the command bus, every table has one owning module, side effects use
+the outbox and documents use the existing access rules. Final state: **504 automated tests (178 unit, 326 integration) and 58 browser checks pass, with zero server error log lines**.
+
+| Area | Result | Where |
+|---|---|---|
+| Inventory write path | `recordStockMovements(tx, …)` is the only way to move stock; append-only ledger with UOM, source type/id/line, reference and actor; SQL sign, company and uniqueness checks; negative-stock guard (advisory locks, then sum); compensating adjustments; seed uses the same API | migration 0010, `modules/inventory` |
+| Purchase orders | Lifecycle below; approval separate from drafting; gapless numbering with a concurrency test; frozen by SQL once approved | migration 0011, `modules/purchasing/orders` |
+| Goods receipts | Accepted/rejected split, no over-receipt (command + FO006), status follows accepted quantity | `modules/purchasing/receipts` |
+| Purchase invoices | PO-based and direct paths, duplicate-bill key, shared GST engine, three-way match, override with reason | migration 0012, `modules/purchasing/invoices` |
+| Payables | Append-only supplier payable ledger (owned by finance), balances views, summary and open-bill queries, KPIs | `modules/finance/payables-ledger.ts`, `modules/payables` |
+| Supplier payments | Request → approve/reject by a different user; full, partial, multi-bill, on-account; FO005 | `modules/payables` |
+| Bank details | RESTRICTED, maker-checker, superseded not edited, masked results and audit, log redaction, FORBIDDEN to the AI | migration 0013, `modules/parties/bank-accounts.ts` |
+| PO PDF | Rendered through the outbox (two-phase handler), SPECIMEN watermark, access via the owning order | `modules/purchasing/pdf` |
+| UI | Suppliers, Purchase orders, Goods receipts, Supplier bills, Payables, Supplier payments, Stock; command palette entries; the browser only previews | `apps/web/src/features/{purchasing,payables,inventory}` |
+| Demo data | Six POs (one draft, one short-closed), four GRNs (one with rejections, one partial), six bills (one accepted with a price difference, one direct, one draft), four payments (full, partial, advance, one awaiting approval), bank details (one approved, one pending) | `seed/demo-data.ts` |
+
+### 12.1 Decisions settled
+
+- **PO lifecycle.** `DRAFT → APPROVED → PARTIALLY_RECEIVED → RECEIVED`; `APPROVED | PARTIALLY_RECEIVED → CLOSED` (short-close, reason); `DRAFT | APPROVED` with nothing received `→ CANCELLED` (reason). Numbered at approval, in PO-date order.
+- **Receiving.** Received = accepted + rejected. Only accepted quantity counts against the order and enters stock. Over-receipt is not permitted in V1; making it an explicit permission is a later decision.
+- **Purchase invoice numbering** follows the **posting date**, not the supplier's bill date, because bills arrive out of order. **Supplier payment numbers** follow the approval date for the same reason. Ledger entries keep the bill and payment dates.
+- **Three-way match** compares the bill with the order and with everything accepted on the order (one bill may cover several deliveries). Findings: not on the order, different item, more than received, price above the order, total differs. Tolerances are company data (defaults: 0 %, 0 %, ₹1) for the CA to set. Nothing is decided by a model.
+- **Maker-checker** for supplier payments and supplier bank details: requester ≠ approver, checked in the command and by a SQL CHECK. Both steps are audited.
+- **Ownership.** purchasing owns orders, receipts and purchase invoices; inventory owns warehouses and stock movements; finance owns the payable ledger; payables owns supplier payments and allocations; parties owns bank details.
+
+### 12.2 Remaining risks and open points
+
+- CA / regulatory: input tax credit and place of supply on purchases [VERIFY R-05], reverse charge [VERIFY R-11], TDS [VERIFY R-17], MSME payment timelines [VERIFY R-18], match tolerances, advances to suppliers, bank identifier formats [VERIFY R-25].
+- No purchase returns or debit notes, PO amendments, approval thresholds, supplier refunds or payment runs.
+- No stock valuation, transfers or batches; sales still do not consume stock (Slice 2).
+- Bank-detail changes are audited but do not yet alert the owner (no notification channel).
+- CI has still never run; production deployment is not built.
+
+### 12.3 Next: Slice 2, on the owner's go-ahead.

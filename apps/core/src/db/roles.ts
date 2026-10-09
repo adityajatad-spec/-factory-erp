@@ -24,6 +24,7 @@ export const APP_SCHEMAS = [
   'finance',
   'docs',
   'inventory',
+  'purchase',
 ] as const;
 
 const ROLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/;

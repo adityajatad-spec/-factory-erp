@@ -9,7 +9,19 @@ import { toJsonb } from '../platform/json';
 import { DEFAULT_ROLES } from '../platform/roles';
 import { createItem } from '../modules/catalog';
 import { hashPassword, loadAccess } from '../modules/identity';
-import { createParty } from '../modules/parties';
+import { createWarehouse, recordStockMovements } from '../modules/inventory';
+import { approveBankAccount, createParty, proposeBankAccount } from '../modules/parties';
+import { approveSupplierPayment, requestSupplierPayment } from '../modules/payables';
+import {
+  approvePurchaseOrder,
+  closePurchaseOrder,
+  createPurchaseInvoiceDraft,
+  createPurchaseOrderDraft,
+  getPurchaseOrder,
+  postPurchaseInvoice,
+  recordGoodsReceipt,
+  updatePurchaseInvoiceDraft,
+} from '../modules/purchasing';
 import {
   cancelInvoice,
   createCreditNoteDraft,
@@ -20,16 +32,23 @@ import {
 import { recordReceipt } from '../modules/receivables';
 import type { Services } from '../services';
 import {
+  DEMO_BANK_ACCOUNTS,
   DEMO_CANCELLATIONS,
   DEMO_COMPANY,
   DEMO_CREDIT_NOTES,
   DEMO_HSN,
   DEMO_INVOICES,
+  DEMO_GOODS_RECEIPTS,
   DEMO_ITEMS,
   DEMO_PARTIES,
+  DEMO_PO_CLOSURES,
+  DEMO_PURCHASE_INVOICES,
+  DEMO_PURCHASE_ORDERS,
   DEMO_RECEIPTS,
+  DEMO_SUPPLIER_PAYMENTS,
   DEMO_RATE_NOTE,
   DEMO_USERS,
+  DEMO_WAREHOUSES,
 } from './demo-data';
 
 /** Roles and their permissions (code → data). Safe to run repeatedly. */
@@ -148,24 +167,29 @@ export async function seedDemo(
     );
   });
 
-  // 2. Everything else goes through the command bus as the demo owner.
-  const ownerId = userIds.get('owner');
-  if (!ownerId) throw new Error('owner user missing');
-  const access = await loadAccess(db, ownerId, companyId);
-  const owner: AuthenticatedActor = {
-    requestId: 'seed',
-    actorKind: 'user',
-    user: {
-      id: ownerId,
-      username: 'owner',
-      displayName: 'Demo Owner',
-      companyId,
-      sessionId: uuidv7(),
-      roles: access.roles,
-      permissions: access.permissions,
-      mustChangePassword: false,
-    },
+  // 2. Everything else goes through the command bus, as the demo user whose job it is.
+  const actorFor = async (username: string): Promise<AuthenticatedActor> => {
+    const id = userIds.get(username);
+    const user = DEMO_USERS.find((u) => u.username === username);
+    if (!id || !user) throw new Error(`${username} user missing`);
+    const access = await loadAccess(db, id, companyId);
+    return {
+      requestId: 'seed',
+      actorKind: 'user',
+      user: {
+        id,
+        username,
+        displayName: user.displayName,
+        companyId,
+        sessionId: uuidv7(),
+        roles: access.roles,
+        permissions: access.permissions,
+        mustChangePassword: false,
+      },
+    };
   };
+  const owner = await actorFor('owner');
+  const ownerId = owner.user.id;
 
   const parties = new Map<string, PartyDto>();
   for (const p of DEMO_PARTIES)
@@ -175,43 +199,41 @@ export async function seedDemo(
   for (const { openingStock: _ignored, ...i } of DEMO_ITEMS)
     items.set(i.code, await services.commands.execute(createItem, i, owner));
 
-  // Opening stock (inventory examples). There is no stock command yet, so this is a direct,
-  // audited seed write into the append-only stock ledger.
+  // Warehouses through the command bus; opening balances through the inventory module's API
+  // (there is deliberately no "opening stock" command), audited as a seed step.
+  const warehouses = new Map<string, string>();
+  for (const w of DEMO_WAREHOUSES) {
+    warehouses.set(w.code, (await services.commands.execute(createWarehouse, w, owner)).id);
+  }
+  const mainWarehouse = warehouses.get('MAIN') ?? '';
   const today = businessDate(now);
   await db.transaction().execute(async (tx) => {
-    const warehouseId = uuidv7();
-    await tx
-      .insertInto('inventory.warehouses')
-      .values({ id: warehouseId, companyId, code: 'MAIN', name: 'Main Store' })
-      .execute();
-    const movements = DEMO_ITEMS.filter((i) => i.openingStock).map((i) => ({
-      id: uuidv7(),
+    const batchId = uuidv7();
+    const movements = await recordStockMovements(tx, {
       companyId,
-      itemId: items.get(i.code)?.id ?? '',
-      warehouseId,
       movementDate: addDays(today, -30),
       movementType: 'OPENING',
-      quantity: i.openingStock ?? '0',
-      sourceType: 'demo.seed',
+      source: { type: 'inventory.opening', id: batchId, reference: 'Opening stock' },
+      lines: DEMO_ITEMS.filter((i) => i.openingStock).map((i, n) => ({
+        lineNo: n + 1,
+        itemId: items.get(i.code)?.id ?? '',
+        warehouseId: mainWarehouse,
+        quantity: i.openingStock ?? '0',
+      })),
       notes: 'Demo opening stock',
-      createdBy: ownerId,
-    }));
-    await tx.insertInto('inventory.stockMovements').values(movements).execute();
+      userId: ownerId,
+      now,
+    });
     await writeAudit(
       tx,
       [
         {
-          entityType: 'inventory.warehouse',
-          entityId: warehouseId,
-          after: { openingMovements: movements.length },
+          entityType: 'inventory.opening',
+          entityId: batchId,
+          after: { movements: movements.length },
         },
       ],
-      {
-        actor: owner,
-        command: 'seed.demo.openingStock',
-        companyId,
-        occurredAt: now,
-      },
+      { actor: owner, command: 'seed.demo.openingStock', companyId, occurredAt: now },
     );
   });
 
@@ -318,6 +340,15 @@ export async function seedDemo(
     );
   }
 
+  // 6. Procure-to-pay, each step by the person whose job it is (maker ≠ checker).
+  const procurement = await seedProcurement(services, {
+    today,
+    actorFor,
+    partyId: (code) => parties.get(code)?.id ?? '',
+    itemId: (code) => items.get(code)?.id ?? '',
+    warehouseId: (code) => warehouses.get(code) ?? '',
+  });
+
   await sql`analyze`.execute(db);
   logger.info(
     {
@@ -328,8 +359,195 @@ export async function seedDemo(
       receiptsRecorded,
       creditNotes,
       cancellations: DEMO_CANCELLATIONS.length,
+      ...procurement,
     },
     'demo data seeded',
   );
   return { seeded: true, companyId, invoicesIssued };
+}
+
+/**
+ * Demo purchasing: POs (drafted by the purchase manager, approved by the owner), goods received
+ * by the supervisor, supplier bills entered and posted by the accountant (the owner accepts the
+ * one that does not match), payments requested by the accountant and approved by the owner,
+ * and supplier bank details proposed by the accountant and approved by the owner.
+ */
+async function seedProcurement(
+  services: Services,
+  ctx: {
+    today: string;
+    actorFor: (username: string) => Promise<AuthenticatedActor>;
+    partyId: (code: string) => string;
+    itemId: (code: string) => string;
+    warehouseId: (code: string) => string;
+  },
+) {
+  const c = services.commands;
+  const [owner, accountant, purchase, supervisor] = await Promise.all(
+    ['owner', 'accountant', 'purchase', 'supervisor'].map(ctx.actorFor),
+  );
+  if (!owner || !accountant || !purchase || !supervisor) throw new Error('demo users missing');
+  const day = (daysAgo: number) => addDays(ctx.today, -daysAgo);
+
+  const orders = new Map<string, string>();
+  for (const po of DEMO_PURCHASE_ORDERS) {
+    const draft = await c.execute(
+      createPurchaseOrderDraft,
+      {
+        supplierId: ctx.partyId(po.supplier),
+        warehouseId: ctx.warehouseId(po.warehouse),
+        poDate: day(po.daysAgo),
+        expectedDate: day(po.daysAgo - po.leadDays),
+        notes: po.notes ?? null,
+        lines: po.lines.map((l) => ({ ...l, itemId: ctx.itemId(l.item) })),
+      },
+      purchase,
+    );
+    orders.set(po.ref, draft.id);
+    if (po.approve) {
+      await c.execute(
+        approvePurchaseOrder,
+        { orderId: draft.id, expectedVersion: draft.version },
+        owner,
+      );
+    }
+  }
+  const orderOf = (ref: string) => {
+    const id = orders.get(ref);
+    if (!id) throw new Error(`unknown demo order ${ref}`);
+    return id;
+  };
+
+  for (const g of DEMO_GOODS_RECEIPTS) {
+    await c.execute(
+      recordGoodsReceipt,
+      {
+        orderId: orderOf(g.order),
+        receiptDate: day(g.daysAgo),
+        supplierReference: g.supplierReference,
+        lines: g.lines.map((l) => ({ ...l, rejectedQuantity: l.rejectedQuantity ?? '0' })),
+      },
+      supervisor,
+    );
+  }
+
+  for (const cl of DEMO_PO_CLOSURES) {
+    const order = await services.queries.execute(
+      getPurchaseOrder,
+      { orderId: orderOf(cl.order) },
+      owner,
+    );
+    await c.execute(
+      closePurchaseOrder,
+      { orderId: order.id, expectedVersion: order.version, reason: cl.reason },
+      owner,
+    );
+  }
+
+  const bills = new Map<string, { id: string; grandTotal: string }>();
+  for (const b of DEMO_PURCHASE_INVOICES) {
+    const body = {
+      supplierId: ctx.partyId(b.supplier),
+      orderId: b.order ? orderOf(b.order) : null,
+      supplierInvoiceNumber: b.supplierInvoiceNumber,
+      invoiceDate: day(b.daysAgo),
+      notes: null,
+      lines: b.lines.map((l, i) => ({
+        ...l,
+        itemId: ctx.itemId(l.item),
+        orderLineNo: b.order ? i + 1 : null,
+      })),
+    };
+    const first = await c.execute(
+      createPurchaseInvoiceDraft,
+      { ...body, supplierStatedTotal: '0.00' },
+      accountant,
+    );
+    // The printed total on the (synthetic) bill is what the shared GST engine computes.
+    const draft = await c.execute(
+      updatePurchaseInvoiceDraft,
+      {
+        ...body,
+        invoiceId: first.id,
+        expectedVersion: first.version,
+        supplierStatedTotal: first.grandTotal,
+      },
+      accountant,
+    );
+    bills.set(b.ref, { id: draft.id, grandTotal: draft.grandTotal });
+    if (b.post) {
+      await c.execute(
+        postPurchaseInvoice,
+        {
+          invoiceId: draft.id,
+          expectedVersion: draft.version,
+          matchOverrideReason: b.overrideReason ?? null,
+        },
+        b.overrideReason ? owner : accountant,
+      );
+    }
+  }
+  const billOf = (ref: string) => {
+    const bill = bills.get(ref);
+    if (!bill) throw new Error(`unknown demo bill ${ref}`);
+    return bill;
+  };
+
+  let paymentsApproved = 0;
+  for (const p of DEMO_SUPPLIER_PAYMENTS) {
+    const allocations = p.allocations.map((a) => ({
+      purchaseInvoiceId: billOf(a.bill).id,
+      amount: a.amount === 'FULL' ? billOf(a.bill).grandTotal : a.amount,
+    }));
+    const requested = await c.execute(
+      requestSupplierPayment,
+      {
+        supplierId: ctx.partyId(p.supplier),
+        paymentDate: day(p.daysAgo),
+        amount: p.amount === 'FULL' ? (allocations[0]?.amount ?? '0') : p.amount,
+        paymentMode: p.paymentMode,
+        reference: p.reference,
+        notes: 'Demo supplier payment (synthetic data)',
+        allocations,
+      },
+      accountant,
+    );
+    if (p.approve) {
+      await c.execute(
+        approveSupplierPayment,
+        { paymentId: requested.id, expectedVersion: requested.version },
+        owner,
+      );
+      paymentsApproved++;
+    }
+  }
+
+  for (const b of DEMO_BANK_ACCOUNTS) {
+    const proposed = await c.execute(
+      proposeBankAccount,
+      {
+        partyId: ctx.partyId(b.supplier),
+        accountHolderName: b.accountHolderName,
+        accountNumber: b.accountNumber,
+        ifsc: b.ifsc,
+        bankName: b.bankName,
+        changeReason: "Supplier's letter on letterhead (demo)",
+      },
+      accountant,
+    );
+    if (b.approve) {
+      await c.execute(
+        approveBankAccount,
+        { bankAccountId: proposed.id, expectedVersion: proposed.version },
+        owner,
+      );
+    }
+  }
+
+  return {
+    purchaseOrders: orders.size,
+    goodsReceipts: DEMO_GOODS_RECEIPTS.length,
+    purchaseInvoices: bills.size,
+    supplierPaymentsApproved: paymentsApproved,
+  };
 }

@@ -34,6 +34,7 @@ export const TABLE_OWNERS: Readonly<Record<string, string>> = {
   'identity.sessions': 'identity',
   'identity.loginAttempts': 'identity',
   'party.parties': 'parties',
+  'party.bankAccounts': 'parties',
   'catalog.items': 'catalog',
   'catalog.hsnCodes': 'catalog',
   'catalog.gstRates': 'catalog',
@@ -46,13 +47,24 @@ export const TABLE_OWNERS: Readonly<Record<string, string>> = {
   'finance.receiptAllocations': 'receivables',
   'finance.partyLedgerEntries': 'finance',
   'docs.documents': 'documents',
-  // The inventory module arrives in Slice 1; until then only the demo seed writes these.
+  'purchase.orders': 'purchasing',
+  'purchase.orderLines': 'purchasing',
+  'purchase.goodsReceipts': 'purchasing',
+  'purchase.goodsReceiptLines': 'purchasing',
+  'purchase.invoices': 'purchasing',
+  'purchase.invoiceLines': 'purchasing',
+  'finance.payableLedgerEntries': 'finance',
+  'finance.supplierPayments': 'payables',
+  'finance.supplierPaymentAllocations': 'payables',
   'inventory.warehouses': 'inventory',
   'inventory.stockMovements': 'inventory',
   // Views are read models: nobody writes them.
   'finance.invoiceBalances': 'view',
   'finance.receiptBalances': 'view',
   'inventory.stockOnHand': 'view',
+  'purchase.orderLineProgress': 'view',
+  'finance.purchaseInvoiceBalances': 'view',
+  'finance.supplierPaymentBalances': 'view',
 };
 
 /**
@@ -67,8 +79,6 @@ export const SEED_BOOTSTRAP_TABLES: ReadonlySet<string> = new Set([
   'platform.companies',
   'catalog.hsnCodes',
   'catalog.gstRates',
-  'inventory.warehouses',
-  'inventory.stockMovements',
 ]);
 
 /** Files allowed to write without a transaction handle, with the reason. */

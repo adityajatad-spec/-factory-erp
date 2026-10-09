@@ -1,6 +1,7 @@
 import pg from 'pg';
 
 const APP_SCHEMAS = [
+  'purchase',
   'inventory',
   'docs',
   'finance',

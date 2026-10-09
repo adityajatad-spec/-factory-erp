@@ -15,6 +15,10 @@ const REDACT = [
   '*.newPassword',
   '*.initialPassword',
   '*.temporaryPassword',
+  // RESTRICTED bank data (supplier bank details).
+  'accountNumber',
+  '*.accountNumber',
+  '*.*.accountNumber',
 ];
 
 export function loggerOptions(level: string, pretty: boolean): LoggerOptions {

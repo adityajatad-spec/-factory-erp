@@ -4,7 +4,7 @@ An AI-native ERP for Indian MSME factories: sales, purchasing, inventory, produc
 
 > **Status: early prototype.**
 >
-> - The Phase 0 foundation and the first end-to-end vertical slice are built.
+> - The Phase 0 foundation, the sales-to-cash loop, Slice 0 hardening and Slice 1 (procure-to-pay with the inventory write path) are built.
 > - **All data is synthetic demo data.** Factory discovery is deferred (see [`docs/discovery/README.md`](docs/discovery/README.md)).
 > - GST rates are labelled `DEMO_UNVERIFIED`.
 > - Invoice PDFs carry a **SPECIMEN** watermark until a chartered accountant has validated the calculations ([architecture, Round 2 §7](docs/ARCHITECTURE.md)).
@@ -27,6 +27,17 @@ An AI-native ERP for Indian MSME factories: sales, purchasing, inventory, produc
 - **Derived settlement:** outstanding = grand total − payments − credit notes. Payment status adds `CREDITED`. Receivables, ageing and dashboard KPIs exclude cancelled invoices and net out credit notes.
 - **Defence in depth:** one settlement lock serialises payments, credit notes and cancellation on an invoice, and deferred SQL checks re-verify every rule at commit (FO003/FO004).
 - **Credit-note PDFs** are generated from the same template and renderer, watermarked SPECIMEN, and hash-verified.
+
+**Procure-to-pay** (Slice 1): supplier → purchase order → approval → goods receipt → stock → supplier bill → three-way match → what we owe → supplier payment (maker-checker) → allocation → outstanding.
+
+- **Suppliers** are parties with the supplier role (no duplicate entity). **Bank details** are RESTRICTED: proposed by one person and approved by another (the old details are superseded, never edited), masked in every command result and audit record, redacted from logs, and never available to the AI.
+- **Purchase orders:** `DRAFT → APPROVED → PARTIALLY_RECEIVED → RECEIVED`, short-close (`CLOSED`) or `CANCELLED` (nothing received), each with a reason. Drafting and approving are separate permissions; approval reprices with the shared GST engine (supplier's state vs ours), gives a gapless `PO/<FY>/<n>` number, freezes the order in SQL and renders a SPECIMEN PDF through the outbox.
+- **Goods receipts (GRN):** received = accepted + rejected; rejected quantity needs a reason, is not stocked and does not use up the order. Over-receipt is refused in the command and again by a deferred SQL check (FO006). Accepted goods enter stock **only through the inventory module's API**.
+- **Inventory write path:** an append-only stock ledger (UOM, source document, reference, actor) with database sign checks; stock on hand is the ledger's sum, never a stored number; stock can never go negative; corrections are compensating adjustments with a reason.
+- **Supplier bills (purchase invoices):** `DRAFT → POSTED`, then immutable. Two explicit paths: against a PO, or direct. Tax is recomputed from the billed rates; the supplier's printed total is kept and compared. The same bill entered twice is refused. Our `PI/<FY>/<n>` number follows the posting date, because bills arrive out of order.
+- **Three-way match** (`purchasing/invoices/matching.ts`): pure and deterministic — item, quantity against what was accepted (across all receipts and earlier bills), price against the order and the total against ours, with tolerances stored per company (defaults: none, ₹1 on totals). A bill with differences can only be posted by someone with the override permission, with a reason that is recorded.
+- **What we owe:** posting credits an append-only supplier payable ledger. Payables show, per supplier: owed, unpaid bills, overdue, due this week, paid and money on account — all derived on the server (`balance = Σ outstanding − Σ on account`).
+- **Supplier payments:** recorded by one user and approved by a different one (enforced in the command and by a SQL check). Approval numbers the payment, debits the ledger and settles the proposed bills — re-checked under row locks, all or nothing. Full, partial, multi-bill and on-account (advance) payments; on-account money is allocated later. A deferred SQL check (FO005) re-verifies every allocation at commit.
 
 - **Authentication and RBAC**
   - argon2id passwords and server-side sessions in `HttpOnly`/`SameSite=Lax` cookies.
@@ -55,7 +66,8 @@ An AI-native ERP for Indian MSME factories: sales, purchasing, inventory, produc
 **Not built yet (by design):**
 
 - refunds, receipt reversals and un-allocation; credit notes after full payment; debit notes; unlinked or multi-invoice credit notes
-- purchasing, production, workforce, maintenance, quality and full accounting
+- purchase returns and debit notes, PO amendments, supplier refunds, input tax credit, reverse charge and TDS on purchases
+- production, workforce, maintenance, quality and full accounting
 - document AI and the AI copilot
 - the control plane and SaaS features
 
@@ -78,6 +90,7 @@ pnpm dev                    # API on :3000, web on http://127.0.0.1:5173
 - Usernames: `owner`, `admin`, `accountant`, `production`, `purchase`, `hrmanager`, `supervisor`, `worker`.
 - Password: `factory-demo` (override with `DEMO_PASSWORD`).
 - Try `accountant` for the full invoicing flow, and `worker` to see permission filtering.
+- Purchasing: `purchase` drafts orders and enters bills, `supervisor` receives goods, `accountant` posts bills and records payments, `owner` (or `admin`) approves orders, payments and bank details.
 
 **Production-style run** (one origin, the core serves the web app):
 
@@ -92,7 +105,7 @@ cd apps/core && WEB_DIST_DIR=../web/dist node --env-file=../../.env dist/main.js
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm verify`                                 | Format check, lint, typecheck, then every test. Run before pushing.                                                                                                                                             |
 | `pnpm test:unit` / `pnpm test:integration`    | Unit tests, or integration tests against real PostgreSQL. Each test file gets its own database cloned from a migrated template.                                                                                 |
-| `pnpm --filter @factory-erp/web e2e`          | After `pnpm build`: all browser journeys (smoke, receivables, corrections, administration) on a throwaway database with fresh demo data. Your dev database is never touched.                                    |
+| `pnpm --filter @factory-erp/web e2e`          | After `pnpm build`: all browser journeys (smoke, receivables, corrections, administration, procure-to-pay) on a throwaway database with fresh demo data. Your dev database is never touched.                    |
 | `pnpm --filter @factory-erp/web e2e:journeys` | The same journeys against an app you are already running (`BASE_URL`, default `:3000`).                                                                                                                         |
 | `pnpm db:migrate`                             | As the schema owner (`DATABASE_OWNER_URL`): apply forward-only SQL migrations, then create the runtime login role if missing. In development the server also does this at startup; in production it never does. |
 | `pnpm backup` / `pnpm backup:verify <dir>`    | Back up the database and PDFs; verify a backup with a full restore drill. See [Backup and restore](#backup-and-restore).                                                                                        |
@@ -159,6 +172,9 @@ Nothing here is production tax-ready. GST rates are demo data, and invoice and c
 - credit-note grounds, particulars and time limits [VERIFY R-03]
 - whether and when an issued invoice may be cancelled rather than credited [VERIFY R-03/R-06]
 - the treatment of advances and of credits after payment
+- purchase side: place of supply and input tax credit [VERIFY R-05], reverse charge on inward supplies such as freight [VERIFY R-11], TDS on purchases [VERIFY R-17], MSME payment timelines that would change due dates [VERIFY R-18]
+- three-way-match tolerances (company settings, defaulting to none), advances paid to suppliers, and booking supplier bills by posting date
+- bank-detail formats (IFSC, account numbers) are checked for shape only [VERIFY R-25]
 
 The full list is in [ADR 0002](docs/adr/0002-sales-correction-path.md) and the regulatory register in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

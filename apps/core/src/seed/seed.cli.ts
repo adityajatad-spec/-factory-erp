@@ -29,7 +29,7 @@ try {
   const result = await seedDemo(services, { password });
   if (result.seeded) {
     const pdfs = await services.outbox.runOnce(50);
-    logger.info({ pdfJobs: pdfs }, 'processed outbox (invoice and credit-note PDFs)');
+    logger.info({ pdfJobs: pdfs }, 'processed outbox (document PDFs)');
     logger.info(
       `Demo users: owner, admin, accountant, production, purchase, hrmanager, supervisor, worker — password "${password}"`,
     );

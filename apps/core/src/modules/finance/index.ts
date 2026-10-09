@@ -6,3 +6,4 @@ export {
   postReceiptToLedger,
   postSalesInvoiceReceivable,
 } from './ledger';
+export { postPurchaseInvoicePayable, postSupplierPaymentToPayables } from './payables-ledger';

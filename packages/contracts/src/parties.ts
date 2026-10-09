@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Gstin, SearchQuery, StateCode, Uuid } from './common';
+import { restricted } from './data-class';
 
 const optionalText = (max: number) =>
   z
@@ -109,4 +110,83 @@ export interface PartyDto {
   version: number;
   /** Receivable balance (debit − credit), present only with finance.receivables.read. */
   receivableBalance: string | null;
+}
+
+/**
+ * Supplier bank details: RESTRICTED, under maker-checker. One person proposes new or changed
+ * details; a different person approves (the previous details are superseded, never edited)
+ * or rejects them. Command results only ever carry the masked number.
+ */
+export const BANK_ACCOUNT_STATUSES = [
+  'PENDING_APPROVAL',
+  'ACTIVE',
+  'REJECTED',
+  'SUPERSEDED',
+] as const;
+export type BankAccountStatus = (typeof BANK_ACCOUNT_STATUSES)[number];
+
+export const ProposeBankAccountRequest = z.object({
+  partyId: Uuid,
+  accountHolderName: z.string().trim().min(1, 'Enter the account holder name').max(100),
+  /** RESTRICTED: never hashed, logged, audited in full or sent to a model. */
+  accountNumber: restricted(
+    z
+      .string()
+      .trim()
+      .regex(/^[0-9]{6,20}$/, 'Account number: digits only'),
+  ),
+  /** Structural check only [VERIFY R-25]. */
+  ifsc: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'IFSC looks like ABCD0123456'),
+  bankName: optionalText(100),
+  branch: optionalText(100),
+  /** Why the details are new or changing (e.g. the supplier's letter). */
+  changeReason: z.string().trim().min(3, 'Give a reason (at least 3 characters)').max(300),
+});
+export type ProposeBankAccountRequest = z.input<typeof ProposeBankAccountRequest>;
+
+export const BankAccountDecisionRequest = z.object({
+  bankAccountId: Uuid,
+  expectedVersion: z.number().int().positive(),
+});
+export type BankAccountDecisionRequest = z.input<typeof BankAccountDecisionRequest>;
+
+export const RejectBankAccountRequest = BankAccountDecisionRequest.extend({
+  reason: z.string().trim().min(3, 'Give a reason (at least 3 characters)').max(300),
+});
+export type RejectBankAccountRequest = z.input<typeof RejectBankAccountRequest>;
+
+export const ListBankAccountsQuery = z.object({ partyId: Uuid });
+export type ListBankAccountsQuery = z.input<typeof ListBankAccountsQuery>;
+
+/** Bank details with the account number masked (e.g. "XXXXXX4321"). */
+export interface BankAccountDto {
+  id: string;
+  partyId: string;
+  status: BankAccountStatus;
+  accountHolderName: string;
+  accountNumberMasked: string;
+  ifsc: string;
+  bankName: string | null;
+  branch: string | null;
+  changeReason: string;
+  requestedAt: string;
+  /** The maker: a different user must approve. */
+  requestedById: string;
+  requestedByName: string;
+  approvedAt: string | null;
+  approvedByName: string | null;
+  rejectedAt: string | null;
+  rejectedByName: string | null;
+  rejectionReason: string | null;
+  supersededAt: string | null;
+  version: number;
+}
+
+/** Only from the RESTRICTED bank-details query (permission party.bank.read, never the AI). */
+export interface RestrictedBankAccountDto extends BankAccountDto {
+  accountNumber: string;
 }

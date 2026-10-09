@@ -6,6 +6,7 @@ import {
   type ItemDto,
 } from '@factory-erp/contracts';
 import type { z } from 'zod';
+import { sql } from 'kysely';
 import type { DbTransaction } from '../../db/database';
 import { businessDate } from '../../platform/clock';
 import { defineCommand, type CommandContext, type CommandOutcome } from '../../platform/commands';
@@ -71,6 +72,22 @@ async function openDraftsWithItem(tx: DbTransaction, companyId: string, itemId: 
 
 const auditView = (i: ItemDto) => ({ ...i, stockOnHand: undefined });
 
+/**
+ * Whether quantities of this item are already recorded anywhere (stock, sales or purchase
+ * documents). Its unit then cannot change, or those quantities would change meaning.
+ * Reads other modules' tables, which is allowed for reads.
+ */
+async function itemInUse(tx: DbTransaction, itemId: string): Promise<boolean> {
+  const { rows } = await sql<{ used: boolean }>`
+    select exists (select 1 from inventory.stock_movements where item_id = ${itemId})
+        or exists (select 1 from sales.invoice_lines where item_id = ${itemId})
+        or exists (select 1 from purchase.order_lines where item_id = ${itemId})
+        or exists (select 1 from purchase.invoice_lines where item_id = ${itemId}) as used`.execute(
+    tx,
+  );
+  return rows[0]?.used ?? false;
+}
+
 export const createItem = defineCommand({
   name: 'items.create',
   description:
@@ -126,6 +143,12 @@ export const updateItem = defineCommand({
   handler: async ({ tx, actor, companyId, now }, input) => {
     const before = await lockItem(tx, companyId, input.itemId, input.expectedVersion, now);
     await assertUomAndHsn(tx, input.uom, input.hsnCode);
+    if (input.uom !== before.uom && (await itemInUse(tx, before.id))) {
+      throw new BusinessRuleError(
+        'UOM_IN_USE',
+        `${before.name} already has stock or documents in ${before.uom}; its unit cannot change`,
+      );
+    }
     await tx
       .updateTable('catalog.items')
       .set({

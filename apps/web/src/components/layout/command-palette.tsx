@@ -5,6 +5,8 @@ import {
   type ItemDto,
   type PartyDto,
   type Permission,
+  type PurchaseInvoiceListItemDto,
+  type PurchaseOrderListItemDto,
 } from '@factory-erp/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, type NavigateOptions } from '@tanstack/react-router';
@@ -54,6 +56,16 @@ function PaletteContent({ onClose }: { onClose: () => void }) {
     queryKey: ['palette', 'parties', q],
     queryFn: () => api.get<PartyDto[]>('/parties', { q, limit: 5 }),
     enabled: searching && can(PERMISSIONS.partyRead),
+  });
+  const orders = useQuery({
+    queryKey: ['palette', 'purchase-orders', q],
+    queryFn: () => api.get<PurchaseOrderListItemDto[]>('/purchase-orders', { q, limit: 5 }),
+    enabled: searching && can(PERMISSIONS.purchaseOrderRead),
+  });
+  const bills = useQuery({
+    queryKey: ['palette', 'bills', q],
+    queryFn: () => api.get<PurchaseInvoiceListItemDto[]>('/purchase-invoices', { q, limit: 5 }),
+    enabled: searching && can(PERMISSIONS.purchaseInvoiceRead),
   });
   const items = useQuery({
     queryKey: ['palette', 'items', q],
@@ -119,9 +131,81 @@ function PaletteContent({ onClose }: { onClose: () => void }) {
       },
       {
         key: 'go-items',
-        label: 'Go to Items & stock',
+        label: 'Go to Items',
         go: { to: '/inventory/items' },
         permission: PERMISSIONS.itemRead,
+      },
+      {
+        key: 'go-stock',
+        label: 'Go to Stock',
+        go: { to: '/inventory/stock' },
+        permission: PERMISSIONS.inventoryStockRead,
+      },
+      {
+        key: 'new-po',
+        label: 'New purchase order',
+        go: { to: '/purchasing/orders/new' },
+        permission: PERMISSIONS.purchaseOrderDraft,
+      },
+      {
+        key: 'go-po',
+        label: 'Go to Purchase orders',
+        go: { to: '/purchasing/orders' },
+        permission: PERMISSIONS.purchaseOrderRead,
+      },
+      {
+        key: 'go-po-overdue',
+        label: 'Overdue purchase orders',
+        go: { to: '/purchasing/orders', search: { view: 'overdue' } },
+        permission: PERMISSIONS.purchaseOrderRead,
+      },
+      {
+        key: 'new-grn',
+        label: 'Receive goods (GRN)',
+        go: { to: '/purchasing/receipts/new' },
+        permission: PERMISSIONS.goodsReceiptRecord,
+      },
+      {
+        key: 'go-grn',
+        label: 'Go to Goods receipts',
+        go: { to: '/purchasing/receipts' },
+        permission: PERMISSIONS.purchaseOrderRead,
+      },
+      {
+        key: 'new-bill',
+        label: 'Enter supplier bill',
+        go: { to: '/purchasing/bills/new' },
+        permission: PERMISSIONS.purchaseInvoiceDraft,
+      },
+      {
+        key: 'go-bills',
+        label: 'Go to Supplier bills',
+        go: { to: '/purchasing/bills' },
+        permission: PERMISSIONS.purchaseInvoiceRead,
+      },
+      {
+        key: 'go-sup',
+        label: 'Go to Suppliers',
+        go: { to: '/purchasing/suppliers' },
+        permission: PERMISSIONS.partyRead,
+      },
+      {
+        key: 'go-payables',
+        label: 'Go to Payables (what we owe)',
+        go: { to: '/finance/payables' },
+        permission: PERMISSIONS.payablesRead,
+      },
+      {
+        key: 'new-spay',
+        label: 'Record supplier payment',
+        go: { to: '/finance/supplier-payments/new' },
+        permission: PERMISSIONS.supplierPaymentRequest,
+      },
+      {
+        key: 'go-spay',
+        label: 'Go to Supplier payments',
+        go: { to: '/finance/supplier-payments' },
+        permission: PERMISSIONS.payablesRead,
       },
     ];
     const lower = query.trim().toLowerCase();
@@ -144,6 +228,22 @@ function PaletteContent({ onClose }: { onClose: () => void }) {
         go: { to: '/sales/credit-notes/$creditNoteId', params: { creditNoteId: c.id } },
       });
     }
+    for (const o of orders.data ?? []) {
+      list.push({
+        key: `po-${o.id}`,
+        label: `${o.poNumber ?? 'Draft PO'} · ${o.supplierName}`,
+        hint: inr(o.grandTotal),
+        go: { to: '/purchasing/orders/$orderId', params: { orderId: o.id } },
+      });
+    }
+    for (const b of bills.data ?? []) {
+      list.push({
+        key: `pi-${b.id}`,
+        label: `${b.invoiceNumber ?? 'Draft bill'} · ${b.supplierName} (${b.supplierInvoiceNumber})`,
+        hint: inr(b.grandTotal),
+        go: { to: '/purchasing/bills/$invoiceId', params: { invoiceId: b.id } },
+      });
+    }
     for (const p of parties.data ?? []) {
       list.push({
         key: `p-${p.id}`,
@@ -161,7 +261,16 @@ function PaletteContent({ onClose }: { onClose: () => void }) {
       });
     }
     return list;
-  }, [query, invoices.data, creditNotes.data, parties.data, items.data, can]);
+  }, [
+    query,
+    invoices.data,
+    creditNotes.data,
+    orders.data,
+    bills.data,
+    parties.data,
+    items.data,
+    can,
+  ]);
 
   const choose = (e: Entry | undefined) => {
     if (!e) return;
@@ -173,7 +282,7 @@ function PaletteContent({ onClose }: { onClose: () => void }) {
     <>
       <Input
         autoFocus
-        placeholder="Invoice number, customer, item, credit note, or a command…"
+        placeholder="Invoice number, customer, credit note, PO, supplier bill, item, or a command…"
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);

@@ -11,3 +11,6 @@ export * from './errors';
 export * from './data-class';
 export * from './users';
 export * from './operations';
+export * from './inventory';
+export * from './purchasing';
+export * from './payables';

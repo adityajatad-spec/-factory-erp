@@ -1,12 +1,17 @@
 import { PERMISSIONS, type Permission } from '@factory-erp/contracts';
 import type { ComponentType } from 'react';
 import {
+  IconBank,
+  IconBill,
   IconBox,
+  IconCart,
   IconChart,
   IconCreditNote,
   IconDashboard,
   IconInvoice,
   IconKey,
+  IconLayers,
+  IconTruck,
   IconUsers,
   IconWallet,
 } from '../icons';
@@ -19,7 +24,14 @@ export interface NavItem {
     | '/sales/customers'
     | '/finance/receipts'
     | '/finance/receivables'
+    | '/finance/payables'
+    | '/finance/supplier-payments'
+    | '/purchasing/suppliers'
+    | '/purchasing/orders'
+    | '/purchasing/receipts'
+    | '/purchasing/bills'
     | '/inventory/items'
+    | '/inventory/stock'
     | '/admin/users'
     | '/admin/jobs';
   label: string;
@@ -28,8 +40,8 @@ export interface NavItem {
 }
 
 /**
- * Only modules that actually work are listed. Purchasing, production, workforce and the rest
- * appear here when they are built — no empty placeholder pages.
+ * Only modules that actually work are listed. Production, workforce and the rest appear here
+ * when they are built — no empty placeholder pages.
  */
 export const NAV: ReadonlyArray<{ section: string | null; items: readonly NavItem[] }> = [
   {
@@ -62,6 +74,35 @@ export const NAV: ReadonlyArray<{ section: string | null; items: readonly NavIte
     ],
   },
   {
+    section: 'Purchasing',
+    items: [
+      {
+        to: '/purchasing/suppliers',
+        label: 'Suppliers',
+        icon: IconUsers,
+        permission: PERMISSIONS.partyRead,
+      },
+      {
+        to: '/purchasing/orders',
+        label: 'Purchase orders',
+        icon: IconCart,
+        permission: PERMISSIONS.purchaseOrderRead,
+      },
+      {
+        to: '/purchasing/receipts',
+        label: 'Goods receipts',
+        icon: IconTruck,
+        permission: PERMISSIONS.purchaseOrderRead,
+      },
+      {
+        to: '/purchasing/bills',
+        label: 'Supplier bills',
+        icon: IconBill,
+        permission: PERMISSIONS.purchaseInvoiceRead,
+      },
+    ],
+  },
+  {
     section: 'Finance',
     items: [
       {
@@ -76,6 +117,18 @@ export const NAV: ReadonlyArray<{ section: string | null; items: readonly NavIte
         icon: IconChart,
         permission: PERMISSIONS.receivablesRead,
       },
+      {
+        to: '/finance/payables',
+        label: 'Payables',
+        icon: IconChart,
+        permission: PERMISSIONS.payablesRead,
+      },
+      {
+        to: '/finance/supplier-payments',
+        label: 'Supplier payments',
+        icon: IconBank,
+        permission: PERMISSIONS.payablesRead,
+      },
     ],
   },
   {
@@ -83,9 +136,15 @@ export const NAV: ReadonlyArray<{ section: string | null; items: readonly NavIte
     items: [
       {
         to: '/inventory/items',
-        label: 'Items & stock',
+        label: 'Items',
         icon: IconBox,
         permission: PERMISSIONS.itemRead,
+      },
+      {
+        to: '/inventory/stock',
+        label: 'Stock',
+        icon: IconLayers,
+        permission: PERMISSIONS.inventoryStockRead,
       },
     ],
   },

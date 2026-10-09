@@ -31,12 +31,15 @@ export function LinesEditor({
   items,
   preview,
   intra,
+  prefillSaleRate = true,
 }: {
   lines: EditorLine[];
   setLines: Dispatch<SetStateAction<EditorLine[]>>;
   items: readonly ItemDto[];
   preview: InvoiceCalcResult | null;
   intra: boolean;
+  /** Sales documents start from the item's sale rate; purchase documents do not. */
+  prefillSaleRate?: boolean;
 }) {
   const [queries, setQueries] = useState<Record<string, string>>({});
   const update = (key: string, patch: Partial<EditorLine>) =>
@@ -84,7 +87,8 @@ export function LinesEditor({
                       update(line.key, {
                         item: it,
                         unitRate:
-                          line.unitRate || (it.defaultSaleRate ? qty(it.defaultSaleRate) : ''),
+                          line.unitRate ||
+                          (prefillSaleRate && it.defaultSaleRate ? qty(it.defaultSaleRate) : ''),
                       })
                     }
                     getKey={(it) => it.id}

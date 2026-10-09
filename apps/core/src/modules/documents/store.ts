@@ -3,7 +3,7 @@ import type { StoredBlob } from '../../platform/blob-store';
 import { uuidv7 } from '../../platform/ids';
 
 /** Kinds of stored document. Each kind's access rule lives in ./access.ts. */
-export type DocumentKind = 'SALES_INVOICE_PDF' | 'SALES_CREDIT_NOTE_PDF';
+export type DocumentKind = 'SALES_INVOICE_PDF' | 'SALES_CREDIT_NOTE_PDF' | 'PURCHASE_ORDER_PDF';
 
 /**
  * Record an already-stored blob as an immutable document (docs.documents is append-only).

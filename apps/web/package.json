@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
     "e2e": "tsx --env-file-if-exists=../../.env e2e/run.ts",
-    "e2e:journeys": "tsx e2e/smoke.ts && tsx e2e/receivables.ts && tsx e2e/corrections.ts"
+    "e2e:journeys": "tsx e2e/smoke.ts && tsx e2e/receivables.ts && tsx e2e/corrections.ts && tsx e2e/procurement.ts"
   },
   "dependencies": {
     "@factory-erp/contracts": "workspace:*",

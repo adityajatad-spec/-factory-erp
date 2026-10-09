@@ -1,4 +1,12 @@
-import type { CreditNoteDto, InvoiceDto, ReceiptDto } from '@factory-erp/contracts';
+import type {
+  BankAccountDto,
+  CreditNoteDto,
+  InvoiceDto,
+  PurchaseInvoiceDto,
+  PurchaseOrderDto,
+  ReceiptDto,
+  SupplierPaymentDto,
+} from '@factory-erp/contracts';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { asAiAgent, createFixture, TEST_PASSWORD, type Fixture } from '../test/fixtures';
@@ -38,8 +46,19 @@ let a: {
   openReceipt: ReceiptDto;
   documentId: string;
   outboxEventId: string;
+  warehouseId: string;
+  draftPo: PurchaseOrderDto;
+  approvedPo: PurchaseOrderDto;
+  receivingPo: PurchaseOrderDto;
+  grnId: string;
+  draftBill: PurchaseInvoiceDto;
+  postedBill: PurchaseInvoiceDto;
+  pendingPayment: SupplierPaymentDto;
+  approvedPayment: SupplierPaymentDto;
+  pendingBank: BankAccountDto;
 };
 let bReceipt: ReceiptDto;
+let bPayment: SupplierPaymentDto;
 let aIds: Set<string>;
 let aFingerprint: string;
 
@@ -66,7 +85,16 @@ async function idsOfCompany(companyId: string): Promise<Set<string>> {
     union all select id::text from finance.party_ledger_entries where company_id = ${companyId}
     union all select id::text from docs.documents where company_id = ${companyId}
     union all select user_id::text from identity.user_roles where company_id = ${companyId}
-    union all select id::text from audit.events where company_id = ${companyId}`.execute(
+    union all select id::text from audit.events where company_id = ${companyId}
+    union all select id::text from inventory.warehouses where company_id = ${companyId}
+    union all select id::text from inventory.stock_movements where company_id = ${companyId}
+    union all select id::text from purchase.orders where company_id = ${companyId}
+    union all select id::text from purchase.goods_receipts where company_id = ${companyId}
+    union all select id::text from purchase.invoices where company_id = ${companyId}
+    union all select id::text from finance.payable_ledger_entries where company_id = ${companyId}
+    union all select id::text from finance.supplier_payments where company_id = ${companyId}
+    union all select id::text from finance.supplier_payment_allocations where company_id = ${companyId}
+    union all select id::text from party.bank_accounts where company_id = ${companyId}`.execute(
     env.ownerDb,
   );
   return new Set(rows.map((r) => r.id));
@@ -88,6 +116,18 @@ async function fingerprint(companyId: string): Promise<string> {
       union all select 'doc' || t::text from docs.documents t where company_id = ${companyId}
       union all select 'series' || t::text from system.number_series t where company_id = ${companyId}
       union all select 'outbox' || t::text from system.outbox_events t where company_id = ${companyId}
+      union all select 'wh' || t::text from inventory.warehouses t where company_id = ${companyId}
+      union all select 'stock' || t::text from inventory.stock_movements t where company_id = ${companyId}
+      union all select 'po' || t::text from purchase.orders t where company_id = ${companyId}
+      union all select 'grn' || t::text from purchase.goods_receipts t where company_id = ${companyId}
+      union all select 'grnl' || l::text from purchase.goods_receipt_lines l join purchase.goods_receipts g on g.id = l.grn_id where g.company_id = ${companyId}
+      union all select 'pol' || l::text from purchase.order_lines l join purchase.orders o on o.id = l.order_id where o.company_id = ${companyId}
+      union all select 'pi' || t::text from purchase.invoices t where company_id = ${companyId}
+      union all select 'pil' || l::text from purchase.invoice_lines l join purchase.invoices i on i.id = l.invoice_id where i.company_id = ${companyId}
+      union all select 'payable' || t::text from finance.payable_ledger_entries t where company_id = ${companyId}
+      union all select 'spay' || t::text from finance.supplier_payments t where company_id = ${companyId}
+      union all select 'spalloc' || t::text from finance.supplier_payment_allocations t where company_id = ${companyId}
+      union all select 'bank' || t::text from party.bank_accounts t where company_id = ${companyId}
       union all select 'audit' || t.id::text from audit.events t where company_id = ${companyId}
     ) rows`.execute(env.ownerDb);
   return rows[0]?.digest ?? '';
@@ -123,6 +163,119 @@ beforeAll(async () => {
   const openReceipt = await f.receipt('250.00');
   await env.services.outbox.runOnce(50);
   const credited = await f.invoice(issuedForCredit.id);
+  const { adjustStock } = await import('./modules/inventory');
+  const purchasing = await import('./modules/purchasing');
+  const poBody = () => ({
+    supplierId: A.suppliers.local.id,
+    warehouseId: A.warehouse.id,
+    poDate: TODAY,
+    lines: [{ itemId: A.items.rawMaterial.id, quantity: '10', unitRate: '50' }],
+  });
+  const draftPo = await cmd.execute(purchasing.createPurchaseOrderDraft, poBody(), A.actors.owner);
+  const toApprove = await cmd.execute(
+    purchasing.createPurchaseOrderDraft,
+    poBody(),
+    A.actors.owner,
+  );
+  const approvedPo = await cmd.execute(
+    purchasing.approvePurchaseOrder,
+    { orderId: toApprove.id, expectedVersion: toApprove.version },
+    A.actors.owner,
+  );
+  const toReceive = await cmd.execute(
+    purchasing.createPurchaseOrderDraft,
+    poBody(),
+    A.actors.owner,
+  );
+  await cmd.execute(
+    purchasing.approvePurchaseOrder,
+    { orderId: toReceive.id, expectedVersion: toReceive.version },
+    A.actors.owner,
+  );
+  const grn = await cmd.execute(
+    purchasing.recordGoodsReceipt,
+    {
+      orderId: toReceive.id,
+      receiptDate: TODAY,
+      lines: [{ orderLineNo: 1, acceptedQuantity: '4' }],
+    },
+    A.actors.owner,
+  );
+  const billBody = (orderId: string | null, supplierInvoiceNumber: string) => ({
+    supplierId: A.suppliers.local.id,
+    orderId,
+    supplierInvoiceNumber,
+    invoiceDate: TODAY,
+    supplierStatedTotal: '236.00',
+    lines: [
+      {
+        itemId: A.items.rawMaterial.id,
+        orderLineNo: orderId ? 1 : null,
+        quantity: '4',
+        unitRate: '50',
+      },
+    ],
+  });
+  const draftBill = await cmd.execute(
+    purchasing.createPurchaseInvoiceDraft,
+    billBody(toReceive.id, 'ALPHA-BILL-1'),
+    A.actors.owner,
+  );
+  const toPost = await cmd.execute(
+    purchasing.createPurchaseInvoiceDraft,
+    billBody(null, 'ALPHA-BILL-2'),
+    A.actors.owner,
+  );
+  const postedBill = await cmd.execute(
+    purchasing.postPurchaseInvoice,
+    { invoiceId: toPost.id, expectedVersion: toPost.version },
+    A.actors.owner,
+  );
+  const payables = await import('./modules/payables');
+  const paymentBody = (supplierId: string) => ({
+    supplierId,
+    paymentDate: TODAY,
+    amount: '50.00',
+    paymentMode: 'BANK_TRANSFER' as const,
+  });
+  const pendingPayment = await cmd.execute(
+    payables.requestSupplierPayment,
+    paymentBody(A.suppliers.local.id),
+    A.actors.accountant,
+  );
+  const toApprovePayment = await cmd.execute(
+    payables.requestSupplierPayment,
+    paymentBody(A.suppliers.local.id),
+    A.actors.accountant,
+  );
+  const approvedPayment = await cmd.execute(
+    payables.approveSupplierPayment,
+    { paymentId: toApprovePayment.id, expectedVersion: toApprovePayment.version },
+    A.actors.owner,
+  );
+  const { proposeBankAccount } = await import('./modules/parties');
+  const pendingBank = await cmd.execute(
+    proposeBankAccount,
+    {
+      partyId: A.suppliers.local.id,
+      accountHolderName: 'Alpha supplier',
+      accountNumber: '123456789012',
+      ifsc: 'HDFC0001234',
+      changeReason: 'isolation setup',
+    },
+    A.actors.accountant,
+  );
+  const warehouse = A.warehouse;
+  await cmd.execute(
+    adjustStock,
+    {
+      warehouseId: warehouse.id,
+      adjustmentDate: TODAY,
+      reason: 'opening count alpha',
+      lines: [{ itemId: A.items.rawMaterial.id, quantity: '100' }],
+    },
+    A.actors.owner,
+  );
   a = {
     draft,
     unpaid: await f.invoice(unpaid.id),
@@ -131,6 +284,16 @@ beforeAll(async () => {
     cnIssued,
     openReceipt,
     documentId: credited.pdfDocumentId ?? '',
+    warehouseId: warehouse.id,
+    draftPo,
+    approvedPo,
+    receivingPo: toReceive,
+    grnId: grn.id,
+    draftBill,
+    postedBill,
+    pendingPayment,
+    approvedPayment,
+    pendingBank,
     // A failed background job of A's, the kind an administrator would retry.
     outboxEventId: (
       await env.ownerDb
@@ -156,6 +319,16 @@ beforeAll(async () => {
   // Company B has its own ordinary business, so "B sees only B" is a real test.
   await flowsB.issued('1694.92');
   bReceipt = await flowsB.receipt('300.00');
+  const bRequested = await env.services.commands.execute(
+    payables.requestSupplierPayment,
+    paymentBody(B.suppliers.local.id),
+    B.actors.accountant,
+  );
+  bPayment = await env.services.commands.execute(
+    payables.approveSupplierPayment,
+    { paymentId: bRequested.id, expectedVersion: bRequested.version },
+    B.actors.owner,
+  );
 
   aIds = await idsOfCompany(A.companyId);
   aFingerprint = await fingerprint(A.companyId);
@@ -299,6 +472,256 @@ const COMMAND_CASES: Record<string, Case[]> = {
     },
   ],
   'operations.outbox.retry': [{ expect: 'rejected', input: () => ({ eventId: a.outboxEventId }) }],
+  'inventory.warehouse.create': [
+    { expect: 'allowed', input: () => ({ code: 'MAIN', name: 'Main bravo' }) }, // codes are per company
+  ],
+  'inventory.stock.adjust': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        warehouseId: a.warehouseId,
+        adjustmentDate: TODAY,
+        reason: 'isolation attempt',
+        lines: [{ itemId: A.items.rawMaterial.id, quantity: '-10' }],
+      }),
+    },
+    {
+      expect: 'rejected',
+      input: () => ({
+        warehouseId: a.warehouseId,
+        adjustmentDate: TODAY,
+        reason: 'isolation attempt',
+        lines: [{ itemId: B.items.rawMaterial.id, quantity: '10' }],
+      }),
+    },
+  ],
+  'purchase.order.createDraft': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        supplierId: A.suppliers.local.id,
+        warehouseId: B.warehouse.id,
+        poDate: TODAY,
+        lines: [{ itemId: B.items.rawMaterial.id, quantity: '1', unitRate: '1' }],
+      }),
+    },
+    {
+      expect: 'rejected',
+      input: () => ({
+        supplierId: B.suppliers.local.id,
+        warehouseId: a.warehouseId,
+        poDate: TODAY,
+        lines: [{ itemId: B.items.rawMaterial.id, quantity: '1', unitRate: '1' }],
+      }),
+    },
+    {
+      expect: 'rejected',
+      input: () => ({
+        supplierId: B.suppliers.local.id,
+        warehouseId: B.warehouse.id,
+        poDate: TODAY,
+        lines: [{ itemId: A.items.rawMaterial.id, quantity: '1', unitRate: '1' }],
+      }),
+    },
+  ],
+  'purchase.order.updateDraft': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        orderId: a.draftPo.id,
+        expectedVersion: a.draftPo.version,
+        supplierId: B.suppliers.local.id,
+        warehouseId: B.warehouse.id,
+        poDate: TODAY,
+        lines: [{ itemId: B.items.rawMaterial.id, quantity: '1', unitRate: '1' }],
+      }),
+    },
+  ],
+  'purchase.order.deleteDraft': [
+    {
+      expect: 'rejected',
+      input: () => ({ orderId: a.draftPo.id, expectedVersion: a.draftPo.version }),
+    },
+  ],
+  'purchase.order.approve': [
+    {
+      expect: 'rejected',
+      input: () => ({ orderId: a.draftPo.id, expectedVersion: a.draftPo.version }),
+    },
+  ],
+  'purchase.order.cancel': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        orderId: a.approvedPo.id,
+        expectedVersion: a.approvedPo.version,
+        reason: 'isolation attempt',
+      }),
+    },
+  ],
+  'purchase.order.close': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        orderId: a.approvedPo.id,
+        expectedVersion: a.approvedPo.version,
+        reason: 'isolation attempt',
+      }),
+    },
+  ],
+  'purchase.grn.record': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        orderId: a.receivingPo.id,
+        receiptDate: TODAY,
+        lines: [{ orderLineNo: 1, acceptedQuantity: '1' }],
+      }),
+    },
+  ],
+  'purchase.invoice.createDraft': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        supplierId: A.suppliers.local.id,
+        orderId: null,
+        supplierInvoiceNumber: 'BRAVO-1',
+        invoiceDate: TODAY,
+        supplierStatedTotal: '59.00',
+        lines: [{ itemId: B.items.rawMaterial.id, quantity: '1', unitRate: '50' }],
+      }),
+    },
+    {
+      expect: 'rejected',
+      input: () => ({
+        supplierId: B.suppliers.local.id,
+        orderId: a.receivingPo.id,
+        supplierInvoiceNumber: 'BRAVO-2',
+        invoiceDate: TODAY,
+        supplierStatedTotal: '59.00',
+        lines: [{ itemId: B.items.rawMaterial.id, orderLineNo: 1, quantity: '1', unitRate: '50' }],
+      }),
+    },
+    {
+      expect: 'rejected',
+      input: () => ({
+        supplierId: B.suppliers.local.id,
+        orderId: null,
+        supplierInvoiceNumber: 'BRAVO-3',
+        invoiceDate: TODAY,
+        supplierStatedTotal: '59.00',
+        lines: [{ itemId: A.items.rawMaterial.id, quantity: '1', unitRate: '50' }],
+      }),
+    },
+  ],
+  'purchase.invoice.updateDraft': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        invoiceId: a.draftBill.id,
+        expectedVersion: a.draftBill.version,
+        supplierId: B.suppliers.local.id,
+        orderId: null,
+        supplierInvoiceNumber: 'BRAVO-4',
+        invoiceDate: TODAY,
+        supplierStatedTotal: '59.00',
+        lines: [{ itemId: B.items.rawMaterial.id, quantity: '1', unitRate: '50' }],
+      }),
+    },
+  ],
+  'purchase.invoice.deleteDraft': [
+    {
+      expect: 'rejected',
+      input: () => ({ invoiceId: a.draftBill.id, expectedVersion: a.draftBill.version }),
+    },
+  ],
+  'purchase.invoice.post': [
+    {
+      expect: 'rejected',
+      input: () => ({ invoiceId: a.draftBill.id, expectedVersion: a.draftBill.version }),
+    },
+  ],
+  'parties.bankAccount.propose': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        partyId: A.suppliers.local.id,
+        accountHolderName: 'Bravo fraud',
+        accountNumber: '999999999999',
+        ifsc: 'ICIC0000001',
+        changeReason: 'isolation attempt',
+      }),
+    },
+  ],
+  'parties.bankAccount.approve': [
+    {
+      expect: 'rejected',
+      input: () => ({ bankAccountId: a.pendingBank.id, expectedVersion: a.pendingBank.version }),
+    },
+  ],
+  'parties.bankAccount.reject': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        bankAccountId: a.pendingBank.id,
+        expectedVersion: a.pendingBank.version,
+        reason: 'isolation attempt',
+      }),
+    },
+  ],
+  'finance.supplierPayment.request': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        supplierId: A.suppliers.local.id,
+        paymentDate: TODAY,
+        amount: '10.00',
+        paymentMode: 'CASH',
+      }),
+    },
+    {
+      expect: 'rejected',
+      input: () => ({
+        supplierId: B.suppliers.local.id,
+        paymentDate: TODAY,
+        amount: '10.00',
+        paymentMode: 'CASH',
+        allocations: [{ purchaseInvoiceId: a.postedBill.id, amount: '10.00' }],
+      }),
+    },
+  ],
+  'finance.supplierPayment.approve': [
+    {
+      expect: 'rejected',
+      input: () => ({ paymentId: a.pendingPayment.id, expectedVersion: a.pendingPayment.version }),
+    },
+  ],
+  'finance.supplierPayment.reject': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        paymentId: a.pendingPayment.id,
+        expectedVersion: a.pendingPayment.version,
+        reason: 'isolation attempt',
+      }),
+    },
+  ],
+  'finance.supplierPayment.allocate': [
+    {
+      expect: 'rejected',
+      input: () => ({
+        paymentId: a.approvedPayment.id,
+        allocations: [{ purchaseInvoiceId: a.postedBill.id, amount: '10.00' }],
+      }),
+    },
+    {
+      expect: 'rejected',
+      input: () => ({
+        paymentId: bPayment.id,
+        allocations: [{ purchaseInvoiceId: a.postedBill.id, amount: '10.00' }],
+      }),
+    },
+  ],
   'sales.invoice.createDraft': [
     {
       expect: 'rejected',
@@ -463,6 +886,56 @@ const QUERY_CASES: Record<string, Case[]> = {
   'documents.content.get': [{ expect: 'not-found', input: () => ({ documentId: a.documentId }) }],
   'dashboard.get': [{ expect: 'no-leak', input: () => ({}) }],
   'identity.users.list': [{ expect: 'no-leak', input: () => ({}) }],
+  'inventory.warehouses.list': [{ expect: 'no-leak', input: () => ({}) }],
+  'purchase.orders.list': [
+    { expect: 'no-leak', input: () => ({}) },
+    { expect: 'no-leak', input: () => ({ supplierId: A.suppliers.local.id }) },
+  ],
+  'purchase.grns.list': [
+    { expect: 'no-leak', input: () => ({}) },
+    { expect: 'no-leak', input: () => ({ orderId: a.receivingPo.id }) },
+  ],
+  'purchase.grns.get': [{ expect: 'not-found', input: () => ({ grnId: a.grnId }) }],
+  'purchase.orders.get': [
+    { expect: 'not-found', input: () => ({ orderId: a.approvedPo.id }) },
+    { expect: 'not-found', input: () => ({ orderId: a.draftPo.id }) },
+  ],
+  'purchase.invoices.list': [
+    { expect: 'no-leak', input: () => ({}) },
+    { expect: 'no-leak', input: () => ({ supplierId: A.suppliers.local.id }) },
+    { expect: 'no-leak', input: () => ({ orderId: a.receivingPo.id }) },
+  ],
+  'purchase.invoices.get': [
+    { expect: 'not-found', input: () => ({ invoiceId: a.postedBill.id }) },
+    { expect: 'not-found', input: () => ({ invoiceId: a.draftBill.id }) },
+  ],
+  'purchase.invoices.match': [
+    { expect: 'not-found', input: () => ({ invoiceId: a.draftBill.id }) },
+  ],
+  'parties.bankAccounts.list': [
+    { expect: 'not-found', input: () => ({ partyId: A.suppliers.local.id }) },
+  ],
+  'finance.supplierPayments.list': [
+    { expect: 'no-leak', input: () => ({}) },
+    { expect: 'no-leak', input: () => ({ supplierId: A.suppliers.local.id }) },
+  ],
+  'finance.supplierPayments.get': [
+    { expect: 'not-found', input: () => ({ paymentId: a.pendingPayment.id }) },
+    { expect: 'not-found', input: () => ({ paymentId: a.approvedPayment.id }) },
+  ],
+  'finance.payables.openInvoices': [
+    { expect: 'no-leak', input: () => ({}) },
+    { expect: 'no-leak', input: () => ({ supplierId: A.suppliers.local.id }) },
+  ],
+  'finance.payables.summary': [{ expect: 'no-leak', input: () => ({}) }],
+  'inventory.stock.list': [
+    { expect: 'no-leak', input: () => ({ includeZero: 'true' }) },
+    { expect: 'no-leak', input: () => ({ warehouseId: a.warehouseId }) },
+  ],
+  'inventory.movements.list': [
+    { expect: 'no-leak', input: () => ({}) },
+    { expect: 'no-leak', input: () => ({ itemId: A.items.rawMaterial.id }) },
+  ],
   'operations.outbox.list': [
     { expect: 'no-leak', input: () => ({}) },
     { expect: 'no-leak', input: () => ({ status: 'PENDING' }) },

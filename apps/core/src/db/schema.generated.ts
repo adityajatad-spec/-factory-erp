@@ -122,6 +122,34 @@ export interface FinancePartyLedgerEntries {
   sourceType: string;
 }
 
+export interface FinancePayableLedgerEntries {
+  companyId: string;
+  createdAt: Generated<Timestamp>;
+  createdBy: string | null;
+  credit: Generated<Numeric>;
+  debit: Generated<Numeric>;
+  entryDate: string;
+  entryType: string;
+  id: string;
+  narration: string | null;
+  partyId: string;
+  sourceId: string;
+  sourceType: string;
+}
+
+export interface FinancePurchaseInvoiceBalances {
+  companyId: string | null;
+  dueDate: string | null;
+  grandTotal: Numeric | null;
+  invoiceDate: string | null;
+  invoiceNumber: string | null;
+  outstandingAmount: Numeric | null;
+  paidAmount: Numeric | null;
+  purchaseInvoiceId: string | null;
+  supplierId: string | null;
+  supplierInvoiceNumber: string | null;
+}
+
 export interface FinanceReceiptAllocations {
   allocatedAt: Generated<Timestamp>;
   allocatedBy: string;
@@ -154,6 +182,48 @@ export interface FinanceReceipts {
   receiptDate: string;
   receiptNumber: string;
   reference: string | null;
+}
+
+export interface FinanceSupplierPaymentAllocations {
+  allocatedAt: Timestamp;
+  allocatedBy: string;
+  amount: Numeric;
+  companyId: string;
+  id: string;
+  paymentId: string;
+  purchaseInvoiceId: string;
+}
+
+export interface FinanceSupplierPaymentBalances {
+  allocatedAmount: Numeric | null;
+  amount: Numeric | null;
+  companyId: string | null;
+  paymentId: string | null;
+  supplierId: string | null;
+  unallocatedAmount: Numeric | null;
+}
+
+export interface FinanceSupplierPayments {
+  amount: Numeric;
+  approvedAt: Timestamp | null;
+  approvedBy: string | null;
+  companyId: string;
+  fiscalYear: string | null;
+  id: string;
+  notes: string | null;
+  paymentDate: string;
+  paymentMode: string;
+  paymentNumber: string | null;
+  proposedAllocations: Generated<Json>;
+  reference: string | null;
+  rejectedAt: Timestamp | null;
+  rejectedBy: string | null;
+  rejectionReason: string | null;
+  requestedAt: Timestamp;
+  requestedBy: string;
+  status: Generated<string>;
+  supplierId: string;
+  version: Generated<number>;
 }
 
 export interface IdentityLoginAttempts {
@@ -219,8 +289,11 @@ export interface InventoryStockMovements {
   movementType: string;
   notes: string | null;
   quantity: Numeric;
+  reference: string | null;
   sourceId: string | null;
+  sourceLineNo: number | null;
   sourceType: string | null;
+  uom: string;
   warehouseId: string;
 }
 
@@ -235,8 +308,32 @@ export interface InventoryWarehouses {
   code: string;
   companyId: string;
   createdAt: Generated<Timestamp>;
+  createdBy: string | null;
   id: string;
   name: string;
+  status: Generated<string>;
+}
+
+export interface PartyBankAccounts {
+  accountHolderName: string;
+  accountNumber: string;
+  approvedAt: Timestamp | null;
+  approvedBy: string | null;
+  bankName: string | null;
+  branch: string | null;
+  changeReason: string;
+  companyId: string;
+  id: string;
+  ifsc: string;
+  partyId: string;
+  rejectedAt: Timestamp | null;
+  rejectedBy: string | null;
+  rejectionReason: string | null;
+  requestedAt: Timestamp;
+  requestedBy: string;
+  status: Generated<string>;
+  supersededAt: Timestamp | null;
+  version: Generated<number>;
 }
 
 export interface PartyParties {
@@ -273,6 +370,7 @@ export interface PlatformCompanies {
   creditNotePrefix: Generated<string>;
   email: string | null;
   financeReadiness: Generated<string>;
+  grnPrefix: Generated<string>;
   gstin: string | null;
   id: string;
   invoicePrefix: Generated<string>;
@@ -280,11 +378,17 @@ export interface PlatformCompanies {
   invoiceTerms: string | null;
   isDemo: Generated<boolean>;
   legalName: string;
+  matchPriceTolerancePercent: Generated<Numeric>;
+  matchQtyTolerancePercent: Generated<Numeric>;
+  matchTotalTolerance: Generated<Numeric>;
   pan: string | null;
   phone: string | null;
+  poPrefix: Generated<string>;
   postalCode: string;
+  purchaseInvoicePrefix: Generated<string>;
   receiptPrefix: Generated<string>;
   stateCode: string;
+  supplierPaymentPrefix: Generated<string>;
   tradeName: string | null;
   updatedAt: Generated<Timestamp>;
 }
@@ -292,6 +396,180 @@ export interface PlatformCompanies {
 export interface PlatformStates {
   code: string;
   name: string;
+}
+
+export interface PurchaseGoodsReceiptLines {
+  acceptedQuantity: Numeric;
+  grnId: string;
+  itemId: string;
+  lineNo: number;
+  orderId: string;
+  orderLineNo: number;
+  receivedQuantity: Numeric;
+  rejectedQuantity: Numeric;
+  rejectionReason: string | null;
+}
+
+export interface PurchaseGoodsReceipts {
+  companyId: string;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  fiscalYear: string;
+  grnNumber: string;
+  id: string;
+  notes: string | null;
+  orderId: string;
+  receiptDate: string;
+  supplierId: string;
+  supplierReference: string | null;
+  warehouseId: string;
+}
+
+export interface PurchaseInvoiceLines {
+  cgstAmount: Numeric;
+  cgstRatePercent: Numeric;
+  description: string;
+  discountAmount: Numeric;
+  discountPercent: Numeric;
+  grossAmount: Numeric;
+  gstRatePercent: Numeric;
+  hsnCode: string;
+  igstAmount: Numeric;
+  igstRatePercent: Numeric;
+  invoiceId: string;
+  itemId: string;
+  lineNo: number;
+  lineTotal: Numeric;
+  orderId: string | null;
+  orderLineNo: number | null;
+  quantity: Numeric;
+  sgstAmount: Numeric;
+  sgstRatePercent: Numeric;
+  taxableAmount: Numeric;
+  unitRate: Numeric;
+  uom: string;
+}
+
+export interface PurchaseInvoices {
+  amountInWords: string;
+  calcEngineVersion: string;
+  cgstAmount: Numeric;
+  companyId: string;
+  createdAt: Generated<Timestamp>;
+  createdBy: string | null;
+  discountAmount: Numeric;
+  dueDate: string;
+  fiscalYear: string | null;
+  goodsReceiptId: string | null;
+  grandTotal: Numeric;
+  grossAmount: Numeric;
+  gstPolicy: Json;
+  id: string;
+  igstAmount: Numeric;
+  invoiceDate: string;
+  invoiceNumber: string | null;
+  matchFindings: Generated<Json>;
+  matchOverrideReason: string | null;
+  matchStatus: string | null;
+  notes: string | null;
+  orderId: string | null;
+  placeOfSupplyStateCode: string;
+  postedAt: Timestamp | null;
+  postedBy: string | null;
+  postingDate: string | null;
+  roundOff: Numeric;
+  sgstAmount: Numeric;
+  status: Generated<string>;
+  supplierFiscalYear: string;
+  supplierId: string;
+  supplierInvoiceKey: string;
+  supplierInvoiceNumber: string;
+  supplierSnapshot: Json | null;
+  supplierStateCode: string;
+  supplierStatedTotal: Numeric;
+  supplyType: string;
+  taxableAmount: Numeric;
+  totalTax: Numeric;
+  updatedAt: Generated<Timestamp>;
+  updatedBy: string | null;
+  version: Generated<number>;
+}
+
+export interface PurchaseOrderLineProgress {
+  acceptedQuantity: Numeric | null;
+  invoicedQuantity: Numeric | null;
+  itemId: string | null;
+  lineNo: number | null;
+  orderedQuantity: Numeric | null;
+  orderId: string | null;
+  rejectedQuantity: Numeric | null;
+  remainingQuantity: Numeric | null;
+}
+
+export interface PurchaseOrderLines {
+  cgstAmount: Numeric;
+  cgstRatePercent: Numeric;
+  description: string;
+  discountAmount: Numeric;
+  discountPercent: Numeric;
+  grossAmount: Numeric;
+  gstRatePercent: Numeric;
+  hsnCode: string;
+  igstAmount: Numeric;
+  igstRatePercent: Numeric;
+  itemId: string;
+  lineNo: number;
+  lineTotal: Numeric;
+  orderId: string;
+  quantity: Numeric;
+  sgstAmount: Numeric;
+  sgstRatePercent: Numeric;
+  taxableAmount: Numeric;
+  unitRate: Numeric;
+  uom: string;
+}
+
+export interface PurchaseOrders {
+  amountInWords: string;
+  approvedAt: Timestamp | null;
+  approvedBy: string | null;
+  calcEngineVersion: string;
+  cancelledAt: Timestamp | null;
+  cancelledBy: string | null;
+  cancelReason: string | null;
+  cgstAmount: Numeric;
+  closedAt: Timestamp | null;
+  closedBy: string | null;
+  closeReason: string | null;
+  companyId: string;
+  createdAt: Generated<Timestamp>;
+  createdBy: string | null;
+  discountAmount: Numeric;
+  expectedDate: string | null;
+  fiscalYear: string | null;
+  grandTotal: Numeric;
+  grossAmount: Numeric;
+  gstPolicy: Json;
+  id: string;
+  igstAmount: Numeric;
+  notes: string | null;
+  pdfDocumentId: string | null;
+  placeOfSupplyStateCode: string;
+  poDate: string;
+  poNumber: string | null;
+  roundOff: Numeric;
+  sgstAmount: Numeric;
+  status: Generated<string>;
+  supplierId: string;
+  supplierSnapshot: Json | null;
+  supplierStateCode: string;
+  supplyType: string;
+  taxableAmount: Numeric;
+  totalTax: Numeric;
+  updatedAt: Generated<Timestamp>;
+  updatedBy: string | null;
+  version: Generated<number>;
+  warehouseId: string;
 }
 
 export interface SalesCreditNoteLines {
@@ -467,9 +745,14 @@ export interface DB {
   "docs.documents": DocsDocuments;
   "finance.invoiceBalances": FinanceInvoiceBalances;
   "finance.partyLedgerEntries": FinancePartyLedgerEntries;
+  "finance.payableLedgerEntries": FinancePayableLedgerEntries;
+  "finance.purchaseInvoiceBalances": FinancePurchaseInvoiceBalances;
   "finance.receiptAllocations": FinanceReceiptAllocations;
   "finance.receiptBalances": FinanceReceiptBalances;
   "finance.receipts": FinanceReceipts;
+  "finance.supplierPaymentAllocations": FinanceSupplierPaymentAllocations;
+  "finance.supplierPaymentBalances": FinanceSupplierPaymentBalances;
+  "finance.supplierPayments": FinanceSupplierPayments;
   "identity.loginAttempts": IdentityLoginAttempts;
   "identity.rolePermissions": IdentityRolePermissions;
   "identity.roles": IdentityRoles;
@@ -479,9 +762,17 @@ export interface DB {
   "inventory.stockMovements": InventoryStockMovements;
   "inventory.stockOnHand": InventoryStockOnHand;
   "inventory.warehouses": InventoryWarehouses;
+  "party.bankAccounts": PartyBankAccounts;
   "party.parties": PartyParties;
   "platform.companies": PlatformCompanies;
   "platform.states": PlatformStates;
+  "purchase.goodsReceiptLines": PurchaseGoodsReceiptLines;
+  "purchase.goodsReceipts": PurchaseGoodsReceipts;
+  "purchase.invoiceLines": PurchaseInvoiceLines;
+  "purchase.invoices": PurchaseInvoices;
+  "purchase.orderLineProgress": PurchaseOrderLineProgress;
+  "purchase.orderLines": PurchaseOrderLines;
+  "purchase.orders": PurchaseOrders;
   "sales.creditNoteLines": SalesCreditNoteLines;
   "sales.creditNotes": SalesCreditNotes;
   "sales.invoiceLines": SalesInvoiceLines;

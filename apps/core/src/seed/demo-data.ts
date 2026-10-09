@@ -251,6 +251,12 @@ export const DEMO_ITEMS: ReadonlyArray<CreateItemRequest & { openingStock?: stri
   },
 ];
 
+/** Store locations. Raw material lives apart from the main (finished goods) store. */
+export const DEMO_WAREHOUSES: ReadonlyArray<{ code: string; name: string }> = [
+  { code: 'MAIN', name: 'Main Store' },
+  { code: 'RM', name: 'Raw Material Store' },
+];
+
 /** Invoices to create, `daysAgo` relative to the seed date. Issued oldest-first. */
 export const DEMO_INVOICES: ReadonlyArray<{
   /** Stable reference so demo receipts can name the invoices they pay. */
@@ -513,5 +519,297 @@ export const DEMO_CREDIT_NOTES: ReadonlyArray<{
     reasonCode: 'DEFICIENT_SUPPLY',
     reason: '20 pieces short-shipped; awaiting customer confirmation (demo)',
     lines: [{ invoiceLineNo: 1, quantity: '20', unitRate: '95.00' }],
+  },
+];
+
+// ---------------------------------------------------------------------------------------------
+// Procure-to-pay (Slice 1). Synthetic suppliers' documents only — never real factory papers.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Demo purchase orders, oldest first (approval numbers them in PO-date order). Drafted by the
+ * purchase manager; approved by the owner unless `approve` is false.
+ */
+export const DEMO_PURCHASE_ORDERS: ReadonlyArray<{
+  ref: string;
+  supplier: string;
+  warehouse: string;
+  daysAgo: number;
+  /** Expected delivery, days after the PO date. */
+  leadDays: number;
+  approve: boolean;
+  notes?: string;
+  lines: ReadonlyArray<{ item: string; quantity: string; unitRate: string }>;
+}> = [
+  {
+    ref: 'P1',
+    supplier: 'S-DMT',
+    warehouse: 'RM',
+    daysAgo: 75,
+    leadDays: 5,
+    approve: true,
+    lines: [
+      { item: 'RM-MS2', quantity: '2000', unitRate: '68.50' },
+      { item: 'RM-SS20', quantity: '300', unitRate: '245.00' },
+    ],
+  },
+  {
+    ref: 'P2',
+    supplier: 'S-SPC',
+    warehouse: 'MAIN',
+    daysAgo: 40,
+    leadDays: 4,
+    approve: true,
+    lines: [{ item: 'PKG-CRT', quantity: '3000', unitRate: '36.00' }],
+  },
+  {
+    ref: 'P3',
+    supplier: 'S-EXL',
+    warehouse: 'MAIN',
+    daysAgo: 20,
+    leadDays: 8,
+    approve: true,
+    notes: 'Deliver in two lots if needed (demo)',
+    lines: [{ item: 'CON-OIL', quantity: '400', unitRate: '185.00' }],
+  },
+  {
+    ref: 'P5',
+    supplier: 'S-SPC',
+    warehouse: 'MAIN',
+    daysAgo: 12,
+    leadDays: 2,
+    approve: true,
+    lines: [{ item: 'PKG-CRT', quantity: '1000', unitRate: '36.50' }],
+  },
+  {
+    ref: 'P4',
+    supplier: 'S-DMT',
+    warehouse: 'RM',
+    daysAgo: 8,
+    leadDays: 11,
+    approve: true,
+    lines: [{ item: 'RM-MS2', quantity: '1500', unitRate: '69.00' }],
+  },
+  {
+    ref: 'P6',
+    supplier: 'S-EXL',
+    warehouse: 'MAIN',
+    daysAgo: 0,
+    leadDays: 10,
+    approve: false,
+    notes: 'Draft awaiting approval (demo)',
+    lines: [{ item: 'CON-OIL', quantity: '200', unitRate: '182.00' }],
+  },
+];
+
+/**
+ * Goods received, in date order (GRN numbering follows dates across all orders). P1 and P5
+ * arrive in full; P2 with 50 crushed cartons rejected; P3 only in part (and is now overdue).
+ */
+export const DEMO_GOODS_RECEIPTS: ReadonlyArray<{
+  order: string;
+  daysAgo: number;
+  supplierReference: string;
+  lines: ReadonlyArray<{
+    orderLineNo: number;
+    acceptedQuantity: string;
+    rejectedQuantity?: string;
+    rejectionReason?: string;
+  }>;
+}> = [
+  {
+    order: 'P1',
+    daysAgo: 70,
+    supplierReference: 'DMT-DC-2231',
+    lines: [
+      { orderLineNo: 1, acceptedQuantity: '2000' },
+      { orderLineNo: 2, acceptedQuantity: '300' },
+    ],
+  },
+  {
+    order: 'P2',
+    daysAgo: 36,
+    supplierReference: 'SPC-DC-0918',
+    lines: [
+      {
+        orderLineNo: 1,
+        acceptedQuantity: '2950',
+        rejectedQuantity: '50',
+        rejectionReason: 'Crushed in transit (demo)',
+      },
+    ],
+  },
+  {
+    order: 'P3',
+    daysAgo: 15,
+    supplierReference: 'EXL-DC-0071',
+    lines: [{ orderLineNo: 1, acceptedQuantity: '250' }],
+  },
+  {
+    order: 'P5',
+    daysAgo: 10,
+    supplierReference: 'SPC-DC-0977',
+    lines: [{ orderLineNo: 1, acceptedQuantity: '1000' }],
+  },
+];
+
+/** Orders short-closed after their receipts: the rest will not come. */
+export const DEMO_PO_CLOSURES: ReadonlyArray<{ order: string; reason: string }> = [
+  { order: 'P2', reason: 'Supplier will not replace the 50 crushed cartons (demo)' },
+];
+
+/**
+ * Supplier bills, entered by the accountant. `order` makes it PO-based (lines bill order lines
+ * in order); without it the bill is direct. The supplier's printed total equals what the
+ * shared GST engine computes. B4 bills ₹37.00 against an ordered ₹36.50: the three-way match
+ * flags it and the owner accepts the difference with a reason.
+ */
+export const DEMO_PURCHASE_INVOICES: ReadonlyArray<{
+  ref: string;
+  supplier: string;
+  order?: string;
+  supplierInvoiceNumber: string;
+  daysAgo: number;
+  post: boolean;
+  overrideReason?: string;
+  lines: ReadonlyArray<{ item: string; quantity: string; unitRate: string }>;
+}> = [
+  {
+    ref: 'B1',
+    supplier: 'S-DMT',
+    order: 'P1',
+    supplierInvoiceNumber: 'DMT/26-27/0412',
+    daysAgo: 70,
+    post: true,
+    lines: [
+      { item: 'RM-MS2', quantity: '2000', unitRate: '68.50' },
+      { item: 'RM-SS20', quantity: '300', unitRate: '245.00' },
+    ],
+  },
+  {
+    ref: 'B2',
+    supplier: 'S-SPC',
+    order: 'P2',
+    supplierInvoiceNumber: 'SPC/1187',
+    daysAgo: 35,
+    post: true,
+    lines: [{ item: 'PKG-CRT', quantity: '2950', unitRate: '36.00' }],
+  },
+  {
+    ref: 'B3',
+    supplier: 'S-EXL',
+    order: 'P3',
+    supplierInvoiceNumber: 'EXL/GJ/26-27/208',
+    daysAgo: 14,
+    post: true,
+    lines: [{ item: 'CON-OIL', quantity: '250', unitRate: '185.00' }],
+  },
+  {
+    ref: 'B4',
+    supplier: 'S-SPC',
+    order: 'P5',
+    supplierInvoiceNumber: 'SPC/1243',
+    daysAgo: 10,
+    post: true,
+    overrideReason: 'Carton price revised to ₹37 by phone; PO amendment to follow (demo)',
+    lines: [{ item: 'PKG-CRT', quantity: '1000', unitRate: '37.00' }],
+  },
+  {
+    ref: 'B5',
+    supplier: 'S-EXL',
+    supplierInvoiceNumber: 'EXL/GJ/26-27/231',
+    daysAgo: 5,
+    post: true,
+    lines: [{ item: 'CON-OIL', quantity: '20', unitRate: '190.00' }],
+  },
+  {
+    ref: 'B6',
+    supplier: 'S-DMT',
+    supplierInvoiceNumber: 'DMT/26-27/0577',
+    daysAgo: 1,
+    post: false,
+    lines: [{ item: 'RM-SS20', quantity: '15', unitRate: '248.00' }],
+  },
+];
+
+/**
+ * Supplier payments: requested by the accountant, approved by the owner (maker-checker) unless
+ * `approve` is false. `FULL` settles a bill's whole amount. Shows full, partial, on-account
+ * (an advance) and one request still waiting for approval.
+ */
+/** An amount like "60000.00", or FULL for the bill's whole amount. */
+type DemoAmount = `${number}.${number}` | 'FULL';
+
+export const DEMO_SUPPLIER_PAYMENTS: ReadonlyArray<{
+  supplier: string;
+  daysAgo: number;
+  amount: DemoAmount;
+  paymentMode: 'BANK_TRANSFER' | 'UPI' | 'CHEQUE' | 'CASH';
+  reference: string;
+  approve: boolean;
+  allocations: ReadonlyArray<{ bill: string; amount: DemoAmount }>;
+}> = [
+  {
+    supplier: 'S-DMT',
+    daysAgo: 40,
+    amount: 'FULL',
+    paymentMode: 'BANK_TRANSFER',
+    reference: 'DEMO-NEFT-P0001',
+    approve: true,
+    allocations: [{ bill: 'B1', amount: 'FULL' }],
+  },
+  {
+    supplier: 'S-SPC',
+    daysAgo: 15,
+    amount: '60000.00',
+    paymentMode: 'CHEQUE',
+    reference: 'DEMO-CHQ-P000311',
+    approve: true,
+    allocations: [{ bill: 'B2', amount: '60000.00' }],
+  },
+  {
+    supplier: 'S-EXL',
+    daysAgo: 3,
+    amount: '10000.00',
+    paymentMode: 'BANK_TRANSFER',
+    reference: 'DEMO-NEFT-P0002',
+    approve: true,
+    allocations: [],
+  },
+  {
+    supplier: 'S-SPC',
+    daysAgo: 0,
+    amount: 'FULL',
+    paymentMode: 'BANK_TRANSFER',
+    reference: 'DEMO-NEFT-P0003',
+    approve: false,
+    allocations: [{ bill: 'B4', amount: 'FULL' }],
+  },
+];
+
+/** Supplier bank details (fictional numbers): one approved, one change awaiting approval. */
+export const DEMO_BANK_ACCOUNTS: ReadonlyArray<{
+  supplier: string;
+  accountHolderName: string;
+  accountNumber: string;
+  ifsc: string;
+  bankName: string;
+  approve: boolean;
+}> = [
+  {
+    supplier: 'S-DMT',
+    accountHolderName: 'Demo Metals Trading',
+    accountNumber: '000111222333',
+    ifsc: 'DEMO0000001',
+    bankName: 'Demo Bank',
+    approve: true,
+  },
+  {
+    supplier: 'S-SPC',
+    accountHolderName: 'Sample Packaging Co',
+    accountNumber: '000444555666',
+    ifsc: 'DEMO0000002',
+    bankName: 'Demo Bank',
+    approve: false,
   },
 ];

@@ -55,8 +55,16 @@ try {
   );
 
   await check('sidebar only shows functional modules', async () => {
-    for (const label of ['Invoices', 'Customers', 'Items & stock'])
-      await page.getByRole('link', { name: label }).first().waitFor();
+    for (const label of [
+      'Invoices',
+      'Customers',
+      'Items',
+      'Stock',
+      'Purchase orders',
+      'Supplier bills',
+      'Payables',
+    ])
+      await page.getByRole('link', { name: label, exact: true }).first().waitFor();
     if ((await page.getByRole('link', { name: 'Production' }).count()) > 0)
       throw new Error('unexpected Production link');
   });
