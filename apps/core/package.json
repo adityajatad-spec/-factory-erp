@@ -17,6 +17,7 @@
     "backup:restore": "tsx --env-file-if-exists=../../.env src/ops/backup.cli.ts restore"
   },
   "dependencies": {
+    "@factory-erp/ai": "workspace:*",
     "@factory-erp/contracts": "workspace:*",
     "@factory-erp/gst": "workspace:*",
     "@factory-erp/money": "workspace:*",

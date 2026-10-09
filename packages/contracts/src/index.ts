@@ -14,3 +14,5 @@ export * from './operations';
 export * from './inventory';
 export * from './purchasing';
 export * from './payables';
+export * from './ai-policy';
+export * from './copilot';

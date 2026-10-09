@@ -128,6 +128,7 @@ async function fingerprint(companyId: string): Promise<string> {
       union all select 'spay' || t::text from finance.supplier_payments t where company_id = ${companyId}
       union all select 'spalloc' || t::text from finance.supplier_payment_allocations t where company_id = ${companyId}
       union all select 'bank' || t::text from party.bank_accounts t where company_id = ${companyId}
+      union all select 'aipolicy' || t::text from ai.policy_versions t where company_id = ${companyId}
       union all select 'audit' || t.id::text from audit.events t where company_id = ${companyId}
     ) rows`.execute(env.ownerDb);
   return rows[0]?.digest ?? '';
@@ -251,6 +252,23 @@ beforeAll(async () => {
   const approvedPayment = await cmd.execute(
     payables.approveSupplierPayment,
     { paymentId: toApprovePayment.id, expectedVersion: toApprovePayment.version },
+    A.actors.owner,
+  );
+  const { setAiPolicy } = await import('./modules/copilot');
+  await cmd.execute(
+    setAiPolicy,
+    {
+      expectedVersion: 0,
+      aiEnabled: true,
+      tasks: {
+        'copilot.answer': {
+          maxDataClass: 'CONFIDENTIAL',
+          approvedModels: [{ modelId: 'ollama:alpha-model', p95LatencyMs: 1000 }],
+          fallback: false,
+        },
+      },
+      reason: 'alpha policy',
+    },
     A.actors.owner,
   );
   const { proposeBankAccount } = await import('./modules/parties');
@@ -641,6 +659,19 @@ const COMMAND_CASES: Record<string, Case[]> = {
       input: () => ({ invoiceId: a.draftBill.id, expectedVersion: a.draftBill.version }),
     },
   ],
+  'ai.policy.set': [
+    {
+      // The company always comes from the session: B's owner can only ever version B's policy
+      // (A's rows are covered by the fingerprint check).
+      expect: 'allowed',
+      input: () => ({
+        expectedVersion: 0,
+        aiEnabled: true,
+        tasks: {},
+        reason: 'bravo policy',
+      }),
+    },
+  ],
   'parties.bankAccount.propose': [
     {
       expect: 'rejected',
@@ -912,6 +943,8 @@ const QUERY_CASES: Record<string, Case[]> = {
   'purchase.invoices.match': [
     { expect: 'not-found', input: () => ({ invoiceId: a.draftBill.id }) },
   ],
+  'ai.policy.get': [{ expect: 'no-leak', input: () => ({}) }],
+  'ai.policy.view': [{ expect: 'no-leak', input: () => ({}) }],
   'parties.bankAccounts.list': [
     { expect: 'not-found', input: () => ({ partyId: A.suppliers.local.id }) },
   ],

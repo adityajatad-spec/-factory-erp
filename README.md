@@ -147,6 +147,15 @@ The application never runs as a database superuser or as the schema owner.
 
 `pnpm db:migrate` creates the runtime login role from `DATABASE_URL` if it is missing (it never changes an existing password). At startup the server checks the schema is current and inspects its own role: in production it refuses to start as a privileged role, in development it warns. `apps/core/src/db/privileges.int.test.ts` proves the runtime role cannot do any of the above and fails if a later migration forgets to restrict a new append-only table or view.
 
+### Role permissions on existing installations (e.g. the new `ai.policy.manage`)
+
+Role permissions are defined in code (`apps/core/src/platform/roles.ts`) and written to `identity.role_permissions` by role synchronisation (`syncRoles`). `ai.policy.manage` goes to OWNER only — ADMIN is defined as every permission except it.
+
+- **Today:** role sync runs only from the development seed and the test fixtures. On a development database, `pnpm db:seed` (without `--reset`) re-syncs the roles before it notices the demo data already exists, and changes nothing else.
+- **Required before production (not built yet):** an idempotent role sync run by `pnpm db:migrate` as the schema owner, so a deployed database receives new permissions in the same step as the migration that needs them. Never use the demo seed to update a production installation.
+
+Until a role has `ai.policy.manage`, nobody can set an AI policy, and with no policy AI stays off — the failure mode is safe.
+
 ## Backup and restore
 
 ```bash

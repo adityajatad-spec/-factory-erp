@@ -73,6 +73,7 @@ exports[`role / permission matrix > matches the reviewed permission matrix 1`] =
   ],
   "OWNER": [
     "account.self",
+    "ai.policy.manage",
     "audit.read",
     "company.read",
     "finance.payables.read",

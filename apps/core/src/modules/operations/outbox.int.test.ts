@@ -75,7 +75,7 @@ describe('failed background jobs', () => {
     expect(row).toMatchObject({
       status: 'FAILED',
       attempts: 2,
-      lastError: 'renderer unavailable',
+      lastError: 'The job failed (Error). Details are in the server log.',
       companyId: fx.companyId,
     });
     expect(row.failedAt).not.toBeNull();
@@ -102,7 +102,7 @@ describe('failed background jobs', () => {
     expect(overview.events.map((e) => e.id)).toEqual([eventId]);
     expect(overview.events[0]).toMatchObject({
       topic: 'test.flaky',
-      lastError: 'renderer unavailable',
+      lastError: 'The job failed (Error). Details are in the server log.',
     });
     expect(
       (await env.services.queries.execute(listOutboxEvents, {}, other.actors.owner)).events,

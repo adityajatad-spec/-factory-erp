@@ -186,6 +186,25 @@ describe('each rule catches its violation', () => {
     ]);
   });
 
+  it('model-via-copilot: only the copilot entry point reaches the model', () => {
+    const files = [
+      core('ai/copilot.ts', 'await deps.ai.gateway.generate(ctx, req);'),
+      core('ai/service.ts', 'const g = createAiGateway({});\nconst a = ollamaAdapter({});'),
+      core('ai/gateway.ts', 'export function createAiGateway() { adapter.invoke(m, r, s); }'),
+      core('http/ai-routes.ts', 'await deps.ai.gateway?.generate(ctx, req);'),
+      core('modules/sales/x.ts', 'gw.generateStructured(ctx, req);'),
+      core('ai/other.ts', 'const g = createAiGateway(cfg);\nawait adapter.invoke(m, r, s);'),
+      core('ai/copilot.test.ts', 'svc.gateway.generate(ctx, req); adapter.invoke(m, r, s);'),
+    ];
+    expect(rules(files)).toEqual([
+      'model-via-copilot', // http: calls the gateway
+      'model-via-copilot', // http: reaches for it
+      'model-via-copilot', // module: calls it
+      'model-via-copilot', // ai/other: builds one
+      'model-via-copilot', // ai/other: calls an adapter
+    ]);
+  });
+
   it('ai-package-pure: packages/ai imports only contracts and zod', () => {
     const files = [
       {

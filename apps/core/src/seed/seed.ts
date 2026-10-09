@@ -10,6 +10,8 @@ import { DEFAULT_ROLES } from '../platform/roles';
 import { createItem } from '../modules/catalog';
 import { hashPassword, loadAccess } from '../modules/identity';
 import { createWarehouse, recordStockMovements } from '../modules/inventory';
+import { FAKE_MODEL_ID } from '../ai/fake-provider';
+import { setAiPolicy } from '../modules/copilot';
 import { approveBankAccount, createParty, proposeBankAccount } from '../modules/parties';
 import { approveSupplierPayment, requestSupplierPayment } from '../modules/payables';
 import {
@@ -348,6 +350,33 @@ export async function seedDemo(
     itemId: (code) => items.get(code)?.id ?? '',
     warehouseId: (code) => warehouses.get(code) ?? '',
   });
+
+  // 7. The demo company's AI policy, set by the owner through the normal (audited) command.
+  //    It approves the local model configured for this installation, if any; with AI off in
+  //    the environment it approves none, so nothing is routed. Other companies have no policy.
+  const ai = services.config.ai;
+  const demoModel =
+    ai.provider === 'fake'
+      ? FAKE_MODEL_ID
+      : ai.provider === 'ollama' && ai.model
+        ? `ollama:${ai.model}`
+        : null;
+  await services.commands.execute(
+    setAiPolicy,
+    {
+      expectedVersion: 0,
+      aiEnabled: true,
+      tasks: {
+        'copilot.answer': {
+          maxDataClass: 'CONFIDENTIAL',
+          approvedModels: demoModel ? [{ modelId: demoModel, p95LatencyMs: ai.timeoutMs }] : [],
+          fallback: false,
+        },
+      },
+      reason: 'Demo company: local copilot over synthetic data (seeded by the owner)',
+    },
+    owner,
+  );
 
   await sql`analyze`.execute(db);
   logger.info(

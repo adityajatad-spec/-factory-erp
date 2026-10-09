@@ -8,6 +8,7 @@ import type { Clock } from './clock';
 import { BusinessRuleError, NotFoundError } from './errors';
 import { uuidv7 } from './ids';
 import { toJsonb } from './json';
+import { publicJobError } from './safe-errors';
 
 export interface OutboxRecord {
   topic: string;
@@ -170,7 +171,8 @@ export class OutboxDispatcher {
     } catch (err) {
       const failed = event.attempts >= this.#maxAttempts;
       const backoffMs = Math.min(60_000 * 2 ** (event.attempts - 1), 60 * 60_000);
-      const lastError = err instanceof Error ? err.message.slice(0, 2000) : String(err);
+      // Shown to the company's administrators: never raw exception or database text.
+      const lastError = publicJobError(err);
       await this.#db.transaction().execute(async (tx) => {
         await tx
           .updateTable('system.outboxEvents')

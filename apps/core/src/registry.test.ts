@@ -55,7 +55,9 @@ describe('the command/query registry', () => {
       drafts.join(),
     ).toBe(true);
     for (const d of [...registry.commands, ...registry.queries]) {
-      if (/^(identity|operations)\./.test(d.name)) expect(d.ai.tier, d.name).toBe('FORBIDDEN');
+      // The AI may never touch identity, operations or its own policy and records.
+      if (/^(identity|operations|ai|copilot)\./.test(d.name))
+        expect(d.ai.tier, d.name).toBe('FORBIDDEN');
     }
   });
 

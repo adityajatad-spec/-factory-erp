@@ -27,6 +27,18 @@ export type Numeric = ColumnType<string, number | string, number | string>;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface AiPolicyVersions {
+  aiEnabled: Generated<boolean>;
+  cloudEnabled: Generated<boolean>;
+  companyId: string;
+  createdAt: Timestamp;
+  createdBy: string;
+  locality: Generated<string>;
+  reason: string;
+  tasks: Generated<Json>;
+  version: number;
+}
+
 export interface AuditEvents {
   actorKind: string;
   actorUserId: string | null;
@@ -737,6 +749,7 @@ export interface SystemOutboxEvents {
 }
 
 export interface DB {
+  "ai.policyVersions": AiPolicyVersions;
   "audit.events": AuditEvents;
   "catalog.gstRates": CatalogGstRates;
   "catalog.hsnCodes": CatalogHsnCodes;

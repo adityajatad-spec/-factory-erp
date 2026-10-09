@@ -4,7 +4,7 @@ import { uuidv7 } from '../src/platform/ids';
 import { toJsonb } from '../src/platform/json';
 import { createItem } from '../src/modules/catalog/commands';
 import { hashPassword } from '../src/modules/identity/password';
-import { loadAccess } from '../src/modules/identity/sessions';
+import { createSession, loadAccess } from '../src/modules/identity/sessions';
 import { createParty } from '../src/modules/parties/commands';
 import { createWarehouse } from '../src/modules/inventory';
 import { syncRoles } from '../src/seed/seed';
@@ -100,6 +100,15 @@ export async function createFixture(
       .values({ userId: id, roleCode: role, companyId })
       .execute();
     const access = await loadAccess(db, id, companyId);
+    // A real session row, so code that re-validates the session (the copilot) sees a live one.
+    const { sessionId } = await createSession(db, {
+      userId: id,
+      companyId,
+      ttlHours: 24 * 365 * 10,
+      now: services.clock.now(),
+      ip: null,
+      userAgent: 'test fixture',
+    });
     return {
       requestId: `test-${username}`,
       actorKind: 'user',
@@ -108,7 +117,7 @@ export async function createFixture(
         username,
         displayName: username,
         companyId,
-        sessionId: uuidv7(),
+        sessionId,
         roles: access.roles,
         permissions: access.permissions,
         mustChangePassword: false,

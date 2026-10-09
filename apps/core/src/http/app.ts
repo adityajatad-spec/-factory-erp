@@ -8,6 +8,7 @@ import { registerAuthRoutes, registerSessionHook } from './auth-routes';
 import { registerErrorHandling } from './errors';
 import './fastify-types';
 import { registerHealthRoutes } from './health-routes';
+import { registerAiRoutes } from './ai-routes';
 import { registerBusinessRoutes } from './routes';
 
 const REQUEST_ID = /^[A-Za-z0-9._-]{8,100}$/;
@@ -60,6 +61,7 @@ export async function buildApp(services: Services): Promise<FastifyInstance> {
       registerSessionHook(api, services);
       await registerAuthRoutes(api, services);
       registerBusinessRoutes(api, services);
+      registerAiRoutes(api, services);
     },
     { prefix: '/api/v1' },
   );

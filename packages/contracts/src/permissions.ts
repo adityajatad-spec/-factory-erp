@@ -50,6 +50,11 @@ export const PERMISSIONS = {
   partyBankRequest: 'party.bank.request',
   /** Approve or reject someone else's bank-detail change (the checker). */
   partyBankApprove: 'party.bank.approve',
+  /**
+   * Change the company's AI policy (enable AI, approve local models, set the data ceiling).
+   * OWNER only: withheld from ADMIN, and the command also checks the OWNER role itself.
+   */
+  aiPolicyManage: 'ai.policy.manage',
   /** Every signed-in user: their own account (change password). */
   accountSelf: 'account.self',
   /** Create users, assign roles, deactivate, reset passwords. */

@@ -11,6 +11,16 @@ function problem(
   return { type: 'about:blank', title, status, code, ...extra };
 }
 
+const FRAMEWORK_TITLES: Partial<Record<number, string>> = {
+  400: 'The request could not be read',
+  404: 'Not found',
+  405: 'Method not allowed',
+  406: 'Not acceptable',
+  413: 'The request body is too large',
+  415: 'Unsupported content type: send JSON',
+  429: 'Too many requests',
+};
+
 /**
  * Every error leaves the API as RFC 9457 problem+json with a stable machine code.
  * With `spaFallback`, unknown non-API GETs serve the web app's index.html instead (client-side
@@ -34,14 +44,16 @@ export function registerErrorHandling(
       err.statusCode >= 400 &&
       err.statusCode < 500
     ) {
-      // Framework-level client errors (bad JSON, unsupported media type, rate limit, ...).
+      // Framework-level client errors (bad JSON, unsupported media type, body too large, ...).
+      // Fixed titles: the framework's own messages echo parser output and request fragments.
       body = problem(
         err.statusCode,
         err.statusCode === 429 ? 'RATE_LIMITED' : 'BAD_REQUEST',
-        err.message,
+        FRAMEWORK_TITLES[err.statusCode] ?? 'The request was rejected',
         { requestId: req.id },
       );
     } else {
+      // The logger's `err` serializer drops database detail and SQL text (see safe-errors).
       req.log.error({ err }, 'unhandled error');
       body = problem(
         500,
@@ -64,16 +76,10 @@ export function registerErrorHandling(
     ) {
       return reply.type('text/html').sendFile('index.html');
     }
+    // Fixed text: the requested path is the client's own input and is not reflected back.
     return reply
       .code(404)
       .type('application/problem+json')
-      .send(
-        problem(
-          404,
-          ERROR_CODES.notFound,
-          `No route for ${req.method} ${req.url.split('?')[0] ?? ''}`,
-          { requestId: req.id },
-        ),
-      );
+      .send(problem(404, ERROR_CODES.notFound, 'Not found', { requestId: req.id }));
   });
 }

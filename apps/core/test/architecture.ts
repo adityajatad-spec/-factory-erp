@@ -35,6 +35,7 @@ export const TABLE_OWNERS: Readonly<Record<string, string>> = {
   'identity.loginAttempts': 'identity',
   'party.parties': 'parties',
   'party.bankAccounts': 'parties',
+  'ai.policyVersions': 'copilot',
   'catalog.items': 'catalog',
   'catalog.hsnCodes': 'catalog',
   'catalog.gstRates': 'catalog',
@@ -99,6 +100,34 @@ const AI_ALLOWED_CORE_IMPORTS = [
 ];
 const AI_ALLOWED_PACKAGES = new Set(['@factory-erp/contracts', '@factory-erp/ai', 'zod']);
 const AI_PACKAGE_ALLOWED = new Set(['@factory-erp/contracts', 'zod']);
+
+/**
+ * The model gateway has exactly one production caller: the copilot entry point, which resolves
+ * the current company policy, the person's current permissions and the allowed tools before
+ * every model call and tool execution. Each pattern below may appear only in its owner file.
+ */
+const MODEL_ACCESS: readonly { pattern: RegExp; owner: string; what: string }[] = [
+  {
+    pattern: /\.(generate|generateStructured|embed|vision)\s*\(/,
+    owner: 'apps/core/src/ai/copilot.ts',
+    what: 'calls the model gateway',
+  },
+  {
+    pattern: /\.gateway\b/,
+    owner: 'apps/core/src/ai/copilot.ts',
+    what: 'reaches for the model gateway',
+  },
+  {
+    pattern: /(?<!function\s+)\b(createAiGateway|ollamaAdapter|fakeProvider)\s*\(/,
+    owner: 'apps/core/src/ai/service.ts',
+    what: 'builds a model gateway or provider adapter',
+  },
+  {
+    pattern: /\.invoke\s*\(/,
+    owner: 'apps/core/src/ai/gateway.ts',
+    what: 'calls a provider adapter directly',
+  },
+];
 
 const CORE = 'apps/core/src/';
 const WRITE_CALL = /([\w.#]+)\s*\.\s*(insertInto|updateTable|deleteFrom|mergeInto)\(\s*'([\w.]+)/g;
@@ -277,6 +306,18 @@ export function checkArchitecture(
         file.path,
         'modules must not open their own transactions; the command bus does',
       );
+    }
+    // --- the model is reached only through the copilot entry point ---
+    if (file.path.startsWith(CORE)) {
+      for (const m of MODEL_ACCESS) {
+        if (file.path !== m.owner && m.pattern.test(file.text)) {
+          add(
+            'model-via-copilot',
+            file.path,
+            `${m.what}; only ${m.owner} may (the copilot re-checks policy and permissions)`,
+          );
+        }
+      }
     }
     if (RAW_DML.test(file.text)) {
       add('no-raw-dml', file.path, 'raw SQL writes bypass the typed, owned write paths');

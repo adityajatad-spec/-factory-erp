@@ -4,3 +4,5 @@ coverage/
 docs/discovery/*.pdf
 apps/core/src/db/schema.generated.ts
 docs/
+# Strategic architecture source copy (kept verbatim; its docs/ copy is ignored above).
+/FACTORY_OS_AI_NATIVE_MASTER_ARCHITECTURE.md

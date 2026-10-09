@@ -23,8 +23,11 @@ export const DEFAULT_ROLES: Record<RoleCode, RoleDefinition> = {
   },
   ADMIN: {
     name: 'Administrator',
-    description: 'Runs the system day to day. Full access in the current modules.',
-    permissions: ALL_PERMISSIONS,
+    description:
+      'Runs the system day to day. Full access in the current modules, except the AI policy (owner only).',
+    // Explicitly everything EXCEPT AI-policy management: a new permission is never inherited
+    // by ADMIN by accident for this one.
+    permissions: ALL_PERMISSIONS.filter((p) => p !== P.aiPolicyManage),
   },
   ACCOUNTANT: {
     name: 'Accountant',

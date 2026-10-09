@@ -41,7 +41,16 @@ export interface ProviderStatus {
   providerId: string;
   healthy: boolean;
   circuitOpen: boolean;
+  /** Why it is unhealthy, as a short code — never a URL, credential or message text. */
+  detail?: ProviderHealthDetail;
 }
+
+export type ProviderHealthDetail =
+  | 'UNREACHABLE'
+  | 'MODEL_NOT_INSTALLED'
+  | 'UNEXPECTED_RESPONSE'
+  /** The runtime would forward the model to a remote host (e.g. an Ollama "-cloud" model). */
+  | 'MODEL_NOT_LOCAL';
 
 /**
  * A model passed a task's evaluation set on THIS hardware (ARCHITECTURE Round 2 §9.4).

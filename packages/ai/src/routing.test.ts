@@ -251,6 +251,17 @@ describe('route — invariants (property tests)', () => {
     );
   });
 
+  it('fails closed: no task policy, or no models registered, never routes', () => {
+    fc.assert(
+      fc.property(scenario, ([req, policy, state]) => {
+        const { [req.task]: _dropped, ...others } = policy.tasks;
+        expect(route(req, { ...policy, tasks: others }, state).ok).toBe(false);
+        expect(route(req, policy, { ...state, models: [] }).ok).toBe(false);
+      }),
+      RUNS,
+    );
+  });
+
   it('a policy with the cloud disabled never selects a cloud model', () => {
     fc.assert(
       fc.property(scenario, ([req, policy, state]) => {

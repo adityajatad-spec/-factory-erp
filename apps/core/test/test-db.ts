@@ -4,11 +4,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import pg from 'pg';
 import { inject } from 'vitest';
-import type { Config } from '../src/config';
+import type { CopilotLimits } from '../src/ai/copilot';
+import type { AiServiceOptions } from '../src/ai/service';
+import { AI_DISABLED, COPILOT_RATE_LIMIT_DEFAULT, type AiConfig, type Config } from '../src/config';
 import { createDatabase, type Database } from '../src/db/database';
-import { createLogger } from '../src/logger';
+import { createLogger, type Logger } from '../src/logger';
 import { fixedClock, systemClock, type Clock } from '../src/platform/clock';
 import type { PdfRenderer } from '../src/platform/pdf';
+import type { RateLimiter } from '../src/platform/rate-limiter';
 import { createServices, type Services } from '../src/services';
 import { runtimeUrl, withDatabase } from './global-setup';
 
@@ -30,7 +33,19 @@ export interface TestEnv {
 
 /** A fresh database cloned from the migrated template, plus wired services. */
 export async function createTestEnv(
-  opts: { clock?: Clock | string; pdfRenderer?: PdfRenderer } = {},
+  opts: {
+    clock?: Clock | string;
+    pdfRenderer?: PdfRenderer;
+    /** Local AI settings and test doubles (default: AI off). */
+    ai?: { config: AiConfig; options?: AiServiceOptions };
+    copilotLimits?: Partial<CopilotLimits>;
+    /** Replaces the copilot's per-person turn limiter (e.g. one with a test clock). */
+    copilotRateLimiter?: RateLimiter;
+    /** Pool settings for the runtime connection (default: 10 connections, 10 s wait). */
+    database?: { maxConnections?: number; acquireTimeoutMs?: number };
+    /** A logger to inspect (default: silent). */
+    logger?: Logger;
+  } = {},
 ): Promise<TestEnv> {
   const adminUrl = inject('testDbAdminUrl');
   const template = inject('testTemplateDb');
@@ -58,6 +73,7 @@ export async function createTestEnv(
     logLevel: 'silent',
     databaseUrl,
     databaseOwnerUrl: undefined,
+    databasePoolAcquireTimeoutMs: opts.database?.acquireTimeoutMs ?? 10_000,
     dataDir,
     cookieSecure: false,
     sessionTtlHours: 12,
@@ -65,12 +81,18 @@ export async function createTestEnv(
     webDistDir: undefined,
     outboxPollMs: 1000,
     loginRateLimitPerMinute: 10,
+    copilotRateLimit: { ...COPILOT_RATE_LIMIT_DEFAULT },
+    ai: opts.ai?.config ?? AI_DISABLED,
   };
   const clock =
     typeof opts.clock === 'string' ? fixedClock(opts.clock) : (opts.clock ?? systemClock);
-  const services = createServices(config, createLogger('silent'), {
+  const services = createServices(config, opts.logger ?? createLogger('silent'), {
     clock,
+    ...(opts.database ? { db: createDatabase(databaseUrl, opts.database) } : {}),
+    ...(opts.copilotLimits ? { copilotLimits: opts.copilotLimits } : {}),
+    ...(opts.copilotRateLimiter ? { copilotRateLimiter: opts.copilotRateLimiter } : {}),
     ...(opts.pdfRenderer ? { pdfRenderer: opts.pdfRenderer } : {}),
+    ...(opts.ai?.options ? { ai: opts.ai.options } : {}),
   });
 
   return {

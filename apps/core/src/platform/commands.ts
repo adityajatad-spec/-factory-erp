@@ -15,6 +15,7 @@ import {
 import { claimIdempotencyKey, storeIdempotentResponse } from './idempotency';
 import { canonicalJson, sha256Hex } from './json';
 import { enqueueOutbox, type OutboxRecord } from './outbox';
+import { isPgError } from './safe-errors';
 import { zodIssues } from './validation';
 
 /**
@@ -143,7 +144,20 @@ export class CommandBus {
         return { replayed: false, result: done.result };
       });
     } catch (err) {
-      throw translateDbError(err);
+      const translated = translateDbError(err);
+      if (translated !== err && isPgError(err)) {
+        // The client gets a generic rule message; operators get the SQLSTATE and the table.
+        this.#logger.warn(
+          {
+            command: command.name,
+            requestId: authed.requestId,
+            sqlState: err.code,
+            table: err.table ?? null,
+          },
+          'command rejected by a database rule',
+        );
+      }
+      throw translated;
     }
 
     this.#logger.info(

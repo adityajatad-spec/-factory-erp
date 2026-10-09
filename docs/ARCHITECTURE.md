@@ -422,11 +422,11 @@ Build versus integrate for later chat is still open. Embedding a self-hostable o
   - `POST /documents` (upload) · `POST /documents/{id}/extract` · `POST /extractions/{id}/approve`
 - **Idempotency:** every non-GET request requires an `Idempotency-Key` header. It protects against offline replays, AI retries and double clicks. Keys are stored with their response for 7 days.
 - **Optimistic concurrency:** updates and transitions require `If-Match: <version>`, and a conflict returns `409`.
-- **Errors:** RFC 9457 `application/problem+json` with stable machine codes such as `CREDIT_LIMIT_EXCEEDED` and `PERIOD_LOCKED`. The copilot explains failures from these codes.
+- **Errors:** RFC 9457 `application/problem+json` with stable machine codes such as `CREDIT_LIMIT_EXCEEDED` and `PERIOD_LOCKED`. The copilot explains failures from these codes. **As built:** clients get application messages and fixed texts only — never database constraint names, row values, SQL, exception messages, stacks or the requested path. Logs record a database error's SQLSTATE, table and column, never its message, detail, SQL or constraint name (`apps/core/src/platform/safe-errors.ts`). Waiting for a pooled database connection is bounded by `DATABASE_POOL_ACQUIRE_TIMEOUT_MS` (default 10 s; then `503 DATABASE_UNAVAILABLE`), separately from per-query statement time limits.
 - **Lists and exports:** cursor pagination, one consistent grammar for filters and sorting, and server-side CSV/XLSX export for reports.
 - **Realtime:** in V1, clients poll lightweight "changes since" endpoints for notifications and dashboard tiles. A WebSocket arrives with chat (E.6). Either way, clients refetch over REST, so data has one canonical shape.
 - **Integrations:** scoped service-account tokens for biometric attendance devices, the Tally bridge and e-invoice provider callbacks. Outbound webhooks come later.
-- **Rate limits** apply per user and per IP. They are stricter on auth endpoints and on remote (tunnel) traffic.
+- **Rate limits** apply per user and per IP. They are stricter on auth endpoints and on remote (tunnel) traffic. **As built:** sign-in is limited per IP (`LOGIN_RATE_LIMIT_PER_MINUTE`) with per-username backoff; copilot turns are limited per person (`COPILOT_RATE_LIMIT_TURNS` per `COPILOT_RATE_LIMIT_WINDOW_SECONDS`, default 20 per 600 s; `429 AI_RATE_LIMITED` with `Retry-After`) on top of the concurrency limits. Both count in each server process separately: they are not distributed limits.
 
 ---
 

@@ -59,6 +59,25 @@ export class PasswordChangeRequiredError extends AppError {
   }
 }
 
+/** A read ran past its statement time limit; PostgreSQL cancelled the statement. */
+export class QueryTimeoutError extends AppError {
+  constructor() {
+    super(ERROR_CODES.queryTimeout, 503, 'The request took too long. Please try again.');
+  }
+}
+
+/** No database connection could be had in time (the pool's bounded acquisition wait). */
+export class DatabaseUnavailableError extends AppError {
+  constructor(options?: { cause?: unknown }) {
+    super(
+      ERROR_CODES.databaseUnavailable,
+      503,
+      'The system is busy right now. Please try again in a moment.',
+    );
+    if (options && 'cause' in options) this.cause = options.cause;
+  }
+}
+
 /** Sign-in backoff after repeated failures for one username. */
 export class TooManyAttemptsError extends AppError {
   readonly retryAfterSeconds: number;

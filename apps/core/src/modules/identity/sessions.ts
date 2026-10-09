@@ -113,3 +113,41 @@ export async function resolveSession(
     mustChangePassword: row.mustChangePassword,
   };
 }
+
+/**
+ * The signed-in user as of NOW, for work that outlives the moment the session was resolved
+ * (a copilot turn makes several model calls and tool executions). The session itself is
+ * checked against the same source of truth as every request (`identity.sessions`: not revoked
+ * by logout or by an administrator, not expired, same user and company), and so is the user
+ * (still active). Roles, permissions and the forced-password-change flag are re-read. Null if
+ * any of it no longer holds. One indexed lookup plus the role query.
+ */
+export async function reloadSessionUser(
+  db: DbExecutor,
+  user: AuthenticatedUser,
+  now: Date,
+): Promise<AuthenticatedUser | null> {
+  const row = await db
+    .selectFrom('identity.sessions as s')
+    .innerJoin('identity.users as u', 'u.id', 's.userId')
+    .select(['u.username', 'u.displayName', 'u.mustChangePassword'])
+    .where('s.id', '=', user.sessionId)
+    .where('s.userId', '=', user.id)
+    .where('s.companyId', '=', user.companyId)
+    .where('s.revokedAt', 'is', null)
+    .where('s.expiresAt', '>', now)
+    .where('u.status', '=', 'ACTIVE')
+    .executeTakeFirst();
+  if (!row) return null;
+  const access = await loadAccess(db, user.id, user.companyId);
+  return {
+    id: user.id,
+    username: row.username,
+    displayName: row.displayName,
+    companyId: user.companyId,
+    sessionId: user.sessionId,
+    roles: access.roles,
+    permissions: access.permissions,
+    mustChangePassword: row.mustChangePassword,
+  };
+}

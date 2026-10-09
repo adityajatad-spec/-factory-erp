@@ -11,6 +11,7 @@ import {
   updateItem,
 } from './modules/catalog';
 import { getCompany, listStates } from './modules/company';
+import { getAiPolicy, setAiPolicy, viewAiPolicy } from './modules/copilot';
 import { getDocumentContentQuery } from './modules/documents';
 import { listOutboxEvents, retryOutboxEvent } from './modules/operations';
 import {
@@ -156,6 +157,7 @@ export function buildRegistry(deps: { blobStore: BlobStore }): {
       proposeBankAccount,
       approveBankAccount,
       rejectBankAccount,
+      setAiPolicy,
     ],
     queries: [
       getCompany,
@@ -194,6 +196,8 @@ export function buildRegistry(deps: { blobStore: BlobStore }): {
       listOpenPayables,
       getPayablesSummary,
       listBankAccounts,
+      getAiPolicy,
+      viewAiPolicy,
     ],
   };
 }

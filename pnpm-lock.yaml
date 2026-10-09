@@ -38,6 +38,9 @@ importers:
 
   apps/core:
     dependencies:
+      '@factory-erp/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@factory-erp/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

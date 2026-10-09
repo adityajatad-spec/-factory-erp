@@ -1,4 +1,5 @@
 import { pino, type LoggerOptions, type Logger } from 'pino';
+import { serializeErrorForLog } from './platform/safe-errors';
 
 /** Fields that must never reach logs. */
 const REDACT = [
@@ -25,6 +26,8 @@ export function loggerOptions(level: string, pretty: boolean): LoggerOptions {
   return {
     level,
     redact: { paths: REDACT, censor: '[redacted]' },
+    // `{ err }` never writes PostgreSQL detail (row values), SQL text or arbitrary error fields.
+    serializers: { err: serializeErrorForLog },
     base: { service: 'factory-erp-core' },
     timestamp: pino.stdTimeFunctions.isoTime,
     ...(pretty
