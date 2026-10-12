@@ -49,7 +49,12 @@ An AI-native ERP for Indian MSME factories: sales, purchasing, inventory, produc
   - **Master data:** customers, suppliers and items can be edited (codes never change) and archived instead of deleted. Archiving is refused while a party has drafts or an open balance, or an item sits on a draft. Issued documents keep the details they were issued with.
   - **Background jobs:** a PDF job that keeps failing stops, is audited, shows on the dashboard and can be retried from Administration → Background jobs.
   - **Backups** with a restore drill (below).
-- **Command bus:** every mutation runs validate → authenticate → authorize → idempotency → transaction → domain rules → persist → audit → outbox. HTTP routes are thin adapters. The future AI copilot will use the same bus, and AI-tier rules are enforced already: the AI can prepare drafts but can never issue an invoice.
+- **Command bus:** every mutation runs validate → authenticate → authorize → idempotency → transaction → domain rules → persist → audit → outbox. HTTP routes are thin adapters. AI-tier rules are enforced in both buses: an AI agent could at most prepare drafts and can never issue an invoice. Today the copilot has no command tools at all.
+- **Copilot** (backend in Slice 2, the page at `/copilot` in Slice 3): questions in plain language, answered by a **local** model (Ollama; nothing is downloaded, nothing goes to a cloud service) from five read-only lookups — customers and suppliers, receivables, payables, stock on hand and warehouses. It runs as the signed-in person: the server re-checks their session, permissions and the company's AI policy throughout every turn, and it cannot change anything.
+  - Answers name the lookups they used, link to the ERP pages where the figures can be checked, and say when a lookup was cut short. A question can be cancelled (Esc); this stops the server's turn, although a model call already running cannot be recalled.
+  - Nothing is saved: each question is answered on its own and leaving the page clears the conversation.
+  - AI is off until the server is configured (`AI_PROVIDER`, `AI_MODEL`, see `.env.example`) and the owner sets a company AI policy. There is no policy screen yet: the policy is set through `PUT /api/v1/ai/policy`.
+  - The browser E2E journey uses a deterministic test provider (`AI_PROVIDER=fake`, refused in production), not a real model; answers that use lookups and failure states are mocked in the browser there.
 - **GST engine** (`packages/gst`)
   - Pure, deterministic and versioned. Uses decimal arithmetic only.
   - Computes CGST/SGST or IGST, line discounts, a rate-wise summary, the round-off and the amount in words in the Indian numbering system.
@@ -68,7 +73,7 @@ An AI-native ERP for Indian MSME factories: sales, purchasing, inventory, produc
 - refunds, receipt reversals and un-allocation; credit notes after full payment; debit notes; unlinked or multi-invoice credit notes
 - purchase returns and debit notes, PO amendments, supplier refunds, input tax credit, reverse charge and TDS on purchases
 - production, workforce, maintenance, quality and full accounting
-- document AI and the AI copilot
+- document AI; copilot drafts and action cards, conversation history and an AI policy screen
 - the control plane and SaaS features
 
 The sidebar only shows modules that work.
@@ -101,17 +106,17 @@ cd apps/core && WEB_DIST_DIR=../web/dist node --env-file=../../.env dist/main.js
 
 ## Commands
 
-| Command                                       | What it does                                                                                                                                                                                                    |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm verify`                                 | Format check, lint, typecheck, then every test. Run before pushing.                                                                                                                                             |
-| `pnpm test:unit` / `pnpm test:integration`    | Unit tests, or integration tests against real PostgreSQL. Each test file gets its own database cloned from a migrated template.                                                                                 |
-| `pnpm --filter @factory-erp/web e2e`          | After `pnpm build`: all browser journeys (smoke, receivables, corrections, administration, procure-to-pay) on a throwaway database with fresh demo data. Your dev database is never touched.                    |
-| `pnpm --filter @factory-erp/web e2e:journeys` | The same journeys against an app you are already running (`BASE_URL`, default `:3000`).                                                                                                                         |
-| `pnpm db:migrate`                             | As the schema owner (`DATABASE_OWNER_URL`): apply forward-only SQL migrations, then create the runtime login role if missing. In development the server also does this at startup; in production it never does. |
-| `pnpm backup` / `pnpm backup:verify <dir>`    | Back up the database and PDFs; verify a backup with a full restore drill. See [Backup and restore](#backup-and-restore).                                                                                        |
-| `pnpm backup:restore <dir> --database <name>` | Restore a backup into a **new** database (never over an existing one).                                                                                                                                          |
-| `pnpm db:codegen`                             | Regenerate Kysely types from the database (`--verify` in CI).                                                                                                                                                   |
-| `pnpm db:seed -- --reset`                     | **Dev only:** drop everything and rebuild the demo dataset.                                                                                                                                                     |
+| Command                                       | What it does                                                                                                                                                                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm verify`                                 | Format check, lint, typecheck, then every test. Run before pushing.                                                                                                                                                            |
+| `pnpm test:unit` / `pnpm test:integration`    | Unit tests, or integration tests against real PostgreSQL. Each test file gets its own database cloned from a migrated template.                                                                                                |
+| `pnpm --filter @factory-erp/web e2e`          | After `pnpm build`: all browser journeys (smoke, receivables, corrections, administration, procure-to-pay, copilot) on a throwaway database with fresh demo data and the test AI provider. Your dev database is never touched. |
+| `pnpm --filter @factory-erp/web e2e:journeys` | The same journeys against an app you are already running (`BASE_URL`, default `:3000`).                                                                                                                                        |
+| `pnpm db:migrate`                             | As the schema owner (`DATABASE_OWNER_URL`): apply forward-only SQL migrations, then create the runtime login role if missing. In development the server also does this at startup; in production it never does.                |
+| `pnpm backup` / `pnpm backup:verify <dir>`    | Back up the database and PDFs; verify a backup with a full restore drill. See [Backup and restore](#backup-and-restore).                                                                                                       |
+| `pnpm backup:restore <dir> --database <name>` | Restore a backup into a **new** database (never over an existing one).                                                                                                                                                         |
+| `pnpm db:codegen`                             | Regenerate Kysely types from the database (`--verify` in CI).                                                                                                                                                                  |
+| `pnpm db:seed -- --reset`                     | **Dev only:** drop everything and rebuild the demo dataset.                                                                                                                                                                    |
 
 ## Repository layout
 

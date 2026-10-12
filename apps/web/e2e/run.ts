@@ -3,7 +3,8 @@
  *
  *   1. create a throwaway database (factoryerp_e2e) and seed the deterministic demo data
  *   2. start the built core (serving the built web app) on its own port and data directory
- *   3. run every journey: smoke, receivables, corrections, administration, procure-to-pay
+ *   3. run every journey: smoke, receivables, corrections, administration, procure-to-pay,
+ *      copilot
  *   4. stop the server, drop the database, delete the data directory
  *
  * Your development database and apps/core/.data are never touched. Requires `pnpm build`,
@@ -33,6 +34,7 @@ const JOURNEYS = [
   'corrections.ts',
   'administration.ts',
   'procurement.ts',
+  'copilot.ts',
 ];
 
 const adminUrl = process.env.TEST_DATABASE_ADMIN_URL;
@@ -92,6 +94,9 @@ const env: NodeJS.ProcessEnv = {
   LOG_LEVEL: 'info',
   // The journeys sign in far more often than a person; per-username backoff is still tested.
   LOGIN_RATE_LIMIT_PER_MINUTE: '120',
+  // The deterministic local test provider (no model, no network; refused in production). The
+  // demo seed approves it in the company AI policy, so the copilot journey runs real turns.
+  AI_PROVIDER: 'fake',
 };
 // The server never sees owner credentials (the dev .env's DATABASE_OWNER_URL points elsewhere).
 delete env.DATABASE_OWNER_URL;

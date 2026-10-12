@@ -2,12 +2,13 @@ import {
   CopilotTurnRequest,
   ERROR_CODES,
   PERMISSIONS,
+  type AiStatusDto,
   type CopilotTurnResponse,
 } from '@factory-erp/contracts';
 import type { FastifyInstance } from 'fastify';
 import type { Copilot, CopilotFailure } from '../ai/copilot';
 import { resolveCompanyPolicy } from '../ai/policy-resolver';
-import type { AiPolicyStatus, AiService, AiStatus } from '../ai/service';
+import type { AiPolicyStatus, AiService } from '../ai/service';
 import { setAiPolicy, viewAiPolicy } from '../modules/copilot';
 import type { CommandBus } from '../platform/commands';
 import type { QueryBus } from '../platform/queries';
@@ -28,7 +29,7 @@ import { body, commandRoute, queryRoute } from './route-kit';
  * coded reason, and the company policy's state. Never the model identifier (deployment
  * detail; the owner sees approved models in the policy view), internal URLs or error text.
  */
-export type AiStatusResponse = Omit<AiStatus, 'modelId'>;
+export type AiStatusResponse = AiStatusDto;
 
 /**
  * AI availability for signed-in users (the copilot UI needs it). Reports the actual state —

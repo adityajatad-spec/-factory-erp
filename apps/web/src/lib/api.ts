@@ -7,8 +7,10 @@ export class ApiError extends Error {
   readonly issues: ProblemDetails['issues'];
   readonly requestId: string | undefined;
   readonly rule: string | undefined;
+  /** The server's Retry-After (seconds), when it sent one with a 429 or 503. */
+  readonly retryAfterSeconds: number | undefined;
 
-  constructor(problem: ProblemDetails) {
+  constructor(problem: ProblemDetails, retryAfterSeconds?: number) {
     super(problem.title);
     this.name = 'ApiError';
     this.status = problem.status;
@@ -16,7 +18,14 @@ export class ApiError extends Error {
     this.issues = problem.issues;
     this.requestId = problem.requestId;
     this.rule = problem.detail;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+/** Retry-After in delta-seconds (the only form the server sends); anything else is ignored. */
+export function parseRetryAfter(value: string | null): number | undefined {
+  if (!value || !/^\d{1,6}$/.test(value.trim())) return undefined;
+  return Number(value.trim());
 }
 
 function isProblem(v: unknown): v is ProblemDetails {
@@ -34,7 +43,7 @@ type Query = Record<string, string | number | boolean | undefined | null>;
 async function request<T>(
   method: string,
   path: string,
-  opts: { body?: unknown; query?: Query } = {},
+  opts: { body?: unknown; query?: Query; signal?: AbortSignal } = {},
 ): Promise<T> {
   const url = new URL(`/api/v1${path}`, window.location.origin);
   for (const [k, v] of Object.entries(opts.query ?? {})) {
@@ -49,6 +58,7 @@ async function request<T>(
     headers,
     credentials: 'same-origin',
     ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
   });
   if (res.status === 204) return undefined as T;
 
@@ -69,6 +79,7 @@ async function request<T>(
             status: res.status,
             code: `HTTP_${res.status}`,
           },
+      parseRetryAfter(res.headers.get('retry-after')),
     );
   }
   return data as T;
@@ -76,7 +87,8 @@ async function request<T>(
 
 export const api = {
   get: <T>(path: string, query?: Query) => request<T>('GET', path, query ? { query } : {}),
-  post: <T>(path: string, body?: unknown) => request<T>('POST', path, { body: body ?? {} }),
+  post: <T>(path: string, body?: unknown, opts: { signal?: AbortSignal } = {}) =>
+    request<T>('POST', path, { body: body ?? {}, ...opts }),
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, { body }),
   del: <T>(path: string, query?: Query) => request<T>('DELETE', path, query ? { query } : {}),
 };

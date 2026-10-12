@@ -108,3 +108,19 @@ export const IconLayers = () => (
     <path d="m3 13 9 5 9-5" />
   </svg>
 );
+export const IconSparkles = () => (
+  <svg {...base} aria-hidden="true">
+    <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
+    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
+  </svg>
+);
+export const IconSend = () => (
+  <svg {...base} aria-hidden="true">
+    <path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" />
+  </svg>
+);
+export const IconStop = () => (
+  <svg {...base} aria-hidden="true">
+    <rect x="6" y="6" width="12" height="12" rx="1.5" />
+  </svg>
+);

@@ -11,6 +11,7 @@ import {
   IconInvoice,
   IconKey,
   IconLayers,
+  IconSparkles,
   IconTruck,
   IconUsers,
   IconWallet,
@@ -19,6 +20,7 @@ import {
 export interface NavItem {
   to:
     | '/'
+    | '/copilot'
     | '/sales/invoices'
     | '/sales/credit-notes'
     | '/sales/customers'
@@ -48,6 +50,7 @@ export const NAV: ReadonlyArray<{ section: string | null; items: readonly NavIte
     section: null,
     items: [
       { to: '/', label: 'Dashboard', icon: IconDashboard, permission: PERMISSIONS.companyRead },
+      { to: '/copilot', label: 'Copilot', icon: IconSparkles, permission: PERMISSIONS.companyRead },
     ],
   },
   {

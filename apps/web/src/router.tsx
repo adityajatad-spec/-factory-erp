@@ -12,6 +12,7 @@ import { ChangePasswordPage } from './features/account/change-password-page';
 import { BackgroundJobsPage } from './features/admin/background-jobs-page';
 import { UsersPage } from './features/admin/users-page';
 import { LoginPage } from './features/auth/login-page';
+import { CopilotPage } from './features/copilot/copilot-page';
 import { CreditNoteDetailPage } from './features/credit-notes/credit-note-detail-page';
 import { CreditNoteEditorPage } from './features/credit-notes/credit-note-editor-page';
 import { CreditNotesPage } from './features/credit-notes/credit-notes-page';
@@ -87,6 +88,12 @@ const dashboardRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/',
   component: DashboardPage,
+});
+
+const copilotRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/copilot',
+  component: CopilotPage,
 });
 
 const invoicesRoute = createRoute({
@@ -341,6 +348,7 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
     dashboardRoute,
+    copilotRoute,
     invoicesRoute,
     invoiceNewRoute,
     invoiceDetailRoute,

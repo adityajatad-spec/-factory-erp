@@ -317,7 +317,7 @@ function untilStopped<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
 }
 
 /** Tools B2.1 may execute: registered READ queries with a result projection. */
-const executable = (t: CopilotTool) =>
+export const executable = (t: CopilotTool) =>
   t.kind === 'query' &&
   t.tier === 'READ' &&
   t.definition.ai.tier === 'READ' &&

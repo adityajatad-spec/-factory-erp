@@ -155,6 +155,17 @@ describe('GET /api/v1/ai/policy — what each person may see', () => {
     });
   });
 
+  it('a company without a policy gets JSON null (the web app reads it as "no policy")', async () => {
+    const other = await createFixture(env.services, { tag: 'nopolicy' });
+    const res = await app.inject({
+      url: '/api/v1/ai/policy',
+      headers: { cookie: await cookieFor(other.actors.owner.user.username) },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(res.json()).toBeNull();
+  });
+
   it('requires a signed-in user', async () => {
     expect((await app.inject('/api/v1/ai/policy')).statusCode).toBe(401);
   });

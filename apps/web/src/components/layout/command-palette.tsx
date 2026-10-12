@@ -82,6 +82,12 @@ function PaletteContent({ onClose }: { onClose: () => void }) {
         permission: PERMISSIONS.companyRead,
       },
       {
+        key: 'go-copilot',
+        label: 'Ask the Copilot',
+        go: { to: '/copilot' },
+        permission: PERMISSIONS.companyRead,
+      },
+      {
         key: 'go-inv',
         label: 'Go to Invoices',
         go: { to: '/sales/invoices' },
